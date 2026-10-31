@@ -18,6 +18,12 @@ HEADER_DIR = ASSETS_DIR / "header"
 BRANDING_DIR = ASSETS_DIR / "branding"
 GALLERY_DIR = DATA_DIR / "gallary"
 
+ANCHOR_OCTOPUS = BRANDING_DIR / "anchor_octopus.png"
+ANCHOR_DOLPHIN = BRANDING_DIR / "anchor_dolphin_octopus.png"
+ANCHOR_BIRDS = BRANDING_DIR / "anchor_birds.png"
+AUTHOR_LOGO = BRANDING_DIR / "author_logo.svg"
+
+LEFT_HEADER_IMAGE = ANCHOR_BIRDS
 
 # -------------------------------------------------
 # Header assets

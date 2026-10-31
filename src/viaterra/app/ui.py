@@ -3,10 +3,11 @@
 
 import streamlit as st
 
-from viaterra.processing.paths import VIATERRA_HEADER
-
-
-
+from viaterra.processing.paths import (
+    VIATERRA_HEADER,
+    LEFT_HEADER_IMAGE,
+    AUTHOR_LOGO,
+)
 
 def render_header() -> None:
     """Render the compact Viaterra homepage header."""
@@ -15,6 +16,14 @@ def render_header() -> None:
 
     svg_base64 = base64.b64encode(
         VIATERRA_HEADER.read_bytes()
+    ).decode("ascii")
+
+    left_base64 = base64.b64encode(
+        LEFT_HEADER_IMAGE.read_bytes()
+    ).decode("ascii")
+
+    author_base64 = base64.b64encode(
+        AUTHOR_LOGO.read_bytes()
     ).decode("ascii")
 
     st.html(
@@ -82,6 +91,24 @@ def render_header() -> None:
                 line-height: 1;
             }}
 
+            .viaterra-author-logo {{
+                position: absolute;
+                top: -10px;
+                right: 0;
+                width: 175px;
+                height: 175px;
+                object-fit: contain;
+                pointer-events: none;
+                filter: grayscale(1) sepia(1) saturate(5)
+                        hue-rotate(165deg) brightness(0.65);
+            }}
+
+            @media (max-width: 640px) {{
+                .viaterra-author-logo {{
+                    display: none;
+                }}
+            }}
+
             .viaterra-subtitle {{
                 font-family: Georgia, "Times New Roman", serif;
                 font-size: 0.85rem;
@@ -102,9 +129,56 @@ def render_header() -> None:
                     font-size: 0.8rem;
                 }}
             }}
+
+            .viaterra-header {{
+                position: relative;
+            }}
+
+            .viaterra-left-illustration {{
+                position: absolute;
+                top: -10px;
+                left: 0;
+                width: 215px;
+                height: 215px;
+                object-fit: contain;
+                pointer-events: none;
+            }}
+
+            [data-testid="stHeaderActionElements"] {{
+                display: none !important;
+            }}
+
+            a.anchor-link {{
+                display: none !important;
+            }}
+
+            @media (max-width: 900px) {{
+                .viaterra-left-illustration {{
+                    width: 110px;
+                    height: 110px;
+                    top: 5px;
+                }}
+            }}
+
+            @media (max-width: 640px) {{
+                .viaterra-left-illustration {{
+                    display: none;
+                }}
+            }}
+
         </style>
 
         <header class="viaterra-header">
+            <img
+                class="viaterra-left-illustration"
+                src="data:image/png;base64,{left_base64}"
+                alt="Antique maritime illustration"
+            >
+            <img
+                class="viaterra-author-logo"
+                src="data:image/svg+xml;base64,{author_base64}"
+                alt="Personal signature"
+            >
             <div class="viaterra-eyebrow">
                ✦ A Personal Travel Atlas ✦
             </div>
