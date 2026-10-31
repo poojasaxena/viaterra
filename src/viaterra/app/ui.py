@@ -105,9 +105,8 @@ def render_header() -> None:
 
         <header class="viaterra-header">
             <div class="viaterra-eyebrow">
-                A Personal Travel Atlas
+               ✦ A Personal Travel Atlas ✦
             </div>
-
             <img
                 class="viaterra-svg"
                 src="data:image/svg+xml;base64,{svg_base64}"
