@@ -1,5 +1,5 @@
 
-"""Centralized filesystem paths for Viaterra."""
+"""Centralized configuration and filesystem paths for Viaterra."""
 
 from pathlib import Path
 import tomllib
@@ -10,6 +10,7 @@ import tomllib
 # -------------------------------------------------
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+CONFIG_PATH = PROJECT_ROOT / "config.toml"
 
 DATA_DIR = PROJECT_ROOT / "data"
 ASSETS_DIR = DATA_DIR / "assets"
@@ -17,7 +18,29 @@ HEADER_DIR = ASSETS_DIR / "header"
 BRANDING_DIR = ASSETS_DIR / "branding"
 GALLERY_DIR = DATA_DIR / "gallary"
 
-CONFIG_PATH = PROJECT_ROOT / "config.toml"
+
+# -------------------------------------------------
+# Header assets
+# -------------------------------------------------
+
+HEADER_FILES = {
+    "Viaterra": "Viaterra.svg",
+    "About Viaterra": "AboutViaterra.svg",
+    "Finding My Anchor": "FindingMyAnchor.svg",
+    "A Thousand Shores, One Anchor": "AThousandShoreOneAnchor.svg",
+    "The Geography of Belonging": "TheGeographyOfBelonging.svg",
+    "Where Horizon Begins": "WhereHorizonBegins.svg",
+    "Not All Anchors Hold Us Still": "NotAllAnchorsHoldsUsStill.svg",
+}
+
+VIATERRA_HEADER = HEADER_DIR / HEADER_FILES["Viaterra"]
+
+
+# -------------------------------------------------
+# Branding assets
+# -------------------------------------------------
+
+PERSONAL_SIGNATURE = BRANDING_DIR / "nostalgic.svg"
 
 
 # -------------------------------------------------
@@ -25,13 +48,15 @@ CONFIG_PATH = PROJECT_ROOT / "config.toml"
 # -------------------------------------------------
 
 def load_config() -> dict:
-    """Load project configuration."""
+    """Load the project configuration."""
+
+    if not CONFIG_PATH.is_file():
+        raise FileNotFoundError(
+            f"Viaterra configuration missing: {CONFIG_PATH}"
+        )
 
     with CONFIG_PATH.open("rb") as file:
         return tomllib.load(file)
-
-
-CONFIG = load_config()
 
 
 # -------------------------------------------------
@@ -39,7 +64,7 @@ CONFIG = load_config()
 # -------------------------------------------------
 
 def resolve_path(value: str | Path) -> Path:
-    """Resolve a path relative to the project root."""
+    """Resolve absolute or project-relative paths."""
 
     path = Path(value).expanduser()
 
@@ -49,21 +74,39 @@ def resolve_path(value: str | Path) -> Path:
     return path.resolve()
 
 
-def gallery_path(name: str) -> Path:
-    """Return a configured gallery asset path."""
+def header_path(name: str) -> Path:
+    """Return the path for a named header SVG."""
 
     try:
-        value = CONFIG["gallary"][name]
+        filename = HEADER_FILES[name]
     except KeyError as exc:
         raise KeyError(
-            f"Gallery asset '{name}' is not configured."
+            f"Unknown header '{name}'. "
+            f"Available headers: {list(HEADER_FILES)}"
         ) from exc
 
-    return resolve_path(value)
+    return HEADER_DIR / filename
 
 
-# -------------------------------------------------
-# Named assets
-# -------------------------------------------------
+def configured_asset(section: str, name: str) -> Path | None:
+    """Return a configured asset if it exists."""
 
-VIATERRA_HEADER = gallery_path("viaterra")
+    value = load_config().get(section, {}).get(name)
+
+    if not value:
+        return None
+
+    path = resolve_path(value)
+    return path if path.is_file() else None
+
+
+def branding_path(name: str) -> Path | None:
+    """Return a configured branding asset."""
+
+    return configured_asset("branding", name)
+
+
+def illustration_path(name: str) -> Path | None:
+    """Return a configured illustration."""
+
+    return configured_asset("illustrations", name)

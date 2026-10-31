@@ -44,7 +44,8 @@ def render_header() -> None:
 
             .viaterra-eyebrow {{
                 color: #899371;
-                font-size: 0.65rem;
+                font-size: 0.60rem;
+                font-family: Georgia, serif;
                 font-weight: 500;
                 letter-spacing: 0.25em;
                 text-transform: uppercase;

@@ -1,2 +1,16 @@
-[gallary]
+
+[gallery]
 viaterra = "data/assets/header/Viaterra.svg"
+about_viaterra = "data/assets/header/AboutViaterra.svg"
+
+[branding]
+signature = "data/assets/branding/nostalgic.svg"
+
+[illustrations]
+home = "data/assets/branding/viaterra_left.png"
+
+[theme]
+background = "#F8F4EB"
+primary = "#17466C"
+secondary = "#557786"
+accent = "#C7A165"
