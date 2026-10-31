@@ -8,6 +8,7 @@ from viaterra.app.ui import (
     render_theme_preview,
     render_welcome,
 )
+from viaterra.app.navigation import render_navigation
 
 
 st.set_page_config(
@@ -19,7 +20,11 @@ st.set_page_config(
 
 render_header()
 
+render_navigation(active_page="Viaterra")
+
 render_welcome()
+render_theme_preview()
+
 
 st.write("")
 
