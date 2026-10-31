@@ -119,8 +119,7 @@ def render_header() -> None:
             </div>
 
             <p class="viaterra-subtitle">
-                Journeys across the world, places that stay,
-                and memories gathered along the way.
+                Finding my anchor across the world
             </p>
         </header>
         """
