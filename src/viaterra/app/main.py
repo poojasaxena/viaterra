@@ -27,5 +27,3 @@ render_theme_preview()
 
 
 st.write("")
-
-render_theme_preview()
