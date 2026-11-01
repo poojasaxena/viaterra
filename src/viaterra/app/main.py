@@ -1,14 +1,10 @@
-
 """Viaterra — Personal Travel Atlas."""
 
 import streamlit as st
 
-from viaterra.app.ui import (
-    render_header,
-    render_theme_preview,
-    render_welcome,
-)
+from viaterra.app.ui import render_header
 from viaterra.app.navigation import render_navigation
+from viaterra.app.components.atlas_map import render_atlas_map
 
 
 st.set_page_config(
@@ -19,11 +15,5 @@ st.set_page_config(
 )
 
 render_header()
-
 render_navigation(active_page="Viaterra")
-
-render_welcome()
-render_theme_preview()
-
-
-st.write("")
+render_atlas_map()

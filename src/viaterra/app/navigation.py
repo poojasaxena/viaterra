@@ -1,173 +1,126 @@
-
-"""Shared page navigation for Viaterra."""
+"""Navigation for Viaterra."""
 
 import base64
-
 import streamlit as st
 
 
-PAGES = [
-    ("Viaterra", "main.py"),
-    ("The Atlas", "pages/1_The_Atlas.py"),
-    ("My Journeys", "pages/2_My_Journeys.py"),
-    ("Places & Memories", "pages/3_Places_and_Memories.py"),
-    ("Travel Statistics", "pages/4_Travel_Statistics.py"),
-    ("About Viaterra", "pages/5_About_Viaterra.py"),
-]
-
-
-# -------------------------------------------------
-# Navigation styling
-# -------------------------------------------------
-
-def apply_navigation_style() -> None:
-    """Apply Viaterra's maritime navigation styling."""
-
-    st.html(
-        """
-        <style>
-        /* Hide default sidebar navigation */
-        [data-testid="stSidebar"],
-        [data-testid="stSidebarCollapsedControl"],
-        [data-testid="stSidebarCollapseButton"] {
-            display: none !important;
-        }
-
-        /* Compact centered desktop navigation */
-        .st-key-viaterra_desktop_nav {
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-            gap: 0.7rem !important;
-            width: 100%;
-            margin: 0 auto 0.8rem;
-        }
-
-        .st-key-viaterra_desktop_nav
-        [data-testid="stElementContainer"],
-        .st-key-viaterra_desktop_nav
-        [data-testid="stPageLink"] {
-            width: auto !important;
-            min-width: 0 !important;
-            flex: 0 0 auto !important;
-        }
-
-        /* Navigation links */
-        .st-key-viaterra_desktop_nav
-        a[data-testid="stPageLink-NavLink"] {
-            display: inline-flex !important;
-            background: transparent !important;
-            border: none !important;
-            border-radius: 0 !important;
-            padding: 0 !important;
-            min-height: 0 !important;
-            width: auto !important;
-        }
-
-        .st-key-viaterra_desktop_nav
-        a[data-testid="stPageLink-NavLink"] p {
-            color: #557786 !important;
-            font-family: Georgia, serif !important;
-            font-size: 13px !important;
-            font-weight: 400 !important;
-            white-space: nowrap;
-            margin: 0 !important;
-        }
-
-        /* Hover */
-        .st-key-viaterra_desktop_nav
-        a[data-testid="stPageLink-NavLink"]:hover p {
-            color: #17466C !important;
-        }
-
-        /* Active page */
-        .st-key-viaterra_desktop_nav
-        a[aria-current="page"] p,
-        .st-key-viaterra_desktop_nav
-        a[aria-disabled="true"] p {
-            color: #17466C !important;
-            font-weight: 700 !important;
-            text-decoration: underline !important;
-            text-underline-offset: 4px;
-            text-decoration-color: #C7A165 !important;
-            opacity: 1 !important;
-        }
-
-        /* Sailing boat separators */
-        .viaterra-nav-separator {
-            color: #17466C;
-            font-family: Georgia, serif;
-            font-size: 14px;
-            line-height: 1;
-        }
-
-        .viaterra-nav-separator img {
-            display: block;
-            width: 16px;
-            height: 16px;
-        }
-
-        /* Mobile navigation */
-        .st-key-viaterra_mobile_nav {
-            display: none !important;
-        }
-
-        @media screen and (max-width: 640px) {
-            .st-key-viaterra_desktop_nav {
-                display: none !important;
-            }
-
-            .st-key-viaterra_mobile_nav {
-                display: block !important;
-                margin-bottom: 0.75rem;
-            }
-
-            .st-key-viaterra_mobile_nav button {
-                background: #E6EFED !important;
-                color: #17466C !important;
-                border: 1px solid #83C9CB !important;
-                font-family: Georgia, serif !important;
-            }
-        }
-        </style>
-        """
-    )
-
-
-# -------------------------------------------------
-# Navigation rendering
-# -------------------------------------------------
-
 def render_navigation(active_page: str) -> None:
-    """Render desktop navigation and mobile menu."""
+    """Render the top navigation with wave separators."""
 
-    apply_navigation_style()
+    items = [
+        ("Viaterra", "/"),
+        ("The Atlas", "/The_Atlas"),
+        ("My Journeys", "/My_Journeys"),
+        ("Places & Memories", "/Places_&_Memories"),
+        ("Travel Statistics", "/Travel_Statistics"),
+        ("About Viaterra", "/About_Viaterra"),
+    ]
 
-    with st.container(
-        key="viaterra_desktop_nav",
-        horizontal=True,
-        horizontal_alignment="center",
-        vertical_alignment="center",
-        gap="small",
-    ):
-        for index, (label, path) in enumerate(PAGES):
-            if index:
-                st.html(
-                    '<span class="viaterra-nav-separator">❦</span>',
-                    width="content",
-                )
 
-            st.page_link(
-                path,
-                label=label,
-                disabled=(label == active_page),
+    wave_svg = """
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 14">
+        <path
+            d="M1 7
+            C5 7, 7 4.5, 11 5
+            C14 5.3, 15 7.5, 19 7
+            C23 6.5, 25 4.5, 29 5.5
+            C31 6, 32 6.5, 33 6"
+            fill="none"
+            stroke="#376E80"
+            stroke-width="1.1"
+            stroke-linecap="round"
+        />
+        <path
+            d="M7 9
+            C11 8.3, 14 9.5, 18 9
+            C22 8.5, 25 8.2, 29 9"
+            fill="none"
+            stroke="#78A8AD"
+            stroke-width="0.7"
+            stroke-linecap="round"
+            opacity="0.8"
+        />
+    </svg>
+    """
+
+    wave_base64 = base64.b64encode(
+        wave_svg.encode("utf-8")
+    ).decode("ascii")
+
+    parts = []
+
+    for i, (label, href) in enumerate(items):
+        active_class = " active" if label == active_page else ""
+
+        parts.append(
+            f"""
+            <a class="viaterra-nav-link{active_class}" href="{href}" target="_self">
+                {label}
+            </a>
+            """
+        )
+
+        if i < len(items) - 1:
+            parts.append(
+                f'<span class="viaterra-nav-separator" aria-hidden="true">'
+                f'<img src="data:image/svg+xml;base64,{wave_base64}" '
+                f'width="25" height="10" alt="">'
+                f'</span>'
             )
 
-    with st.container(key="viaterra_mobile_nav"):
-        with st.popover("☰ Explore Viaterra"):
-            for label, path in PAGES:
-                st.page_link(
-                    path,
-                    label=label,
-                    disabled=(label == active_page),
-                )
+    html = f"""
+    <style>
+    .viaterra-nav {{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        line-height: 1.2;
+    }}
+
+    .viaterra-nav-link {{
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 0.91rem;
+        font-weight: 400;
+        color: #315B70;
+        text-decoration: none;
+        padding: 0.05rem 0.12rem;
+        white-space: nowrap;
+    }}
+
+    .viaterra-nav-link:hover {{
+        color: #24495C;
+        text-decoration: none;
+    }}
+
+    .viaterra-nav-link.active {{
+        color: #24495C;
+        font-weight: 500;
+    }}
+
+    .viaterra-nav-separator {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        width: 25px;
+        height: 12px;
+        margin: 0 0.1rem;
+    }}
+
+    .viaterra-nav-separator img {{
+        display: block;
+        width: 25px;
+        height: 10px;
+    }}
+    </style>
+
+    <div class="viaterra-nav-wrap">
+        <nav class="viaterra-nav">
+            {''.join(parts)}
+        </nav>
+    </div>
+    """
+
+    st.html(html)
