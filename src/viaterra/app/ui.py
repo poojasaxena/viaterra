@@ -115,7 +115,7 @@ def render_header() -> None:
                 font-style: italic;
                 color: #557786;
                 line-height: 1.4;
-                margin: 0;
+                margin: 0 0 30px;
                 white-space: nowrap;
             }}
 
