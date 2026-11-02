@@ -15,13 +15,32 @@ _MAP_HTML = r"""<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <link href="https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.css" rel="stylesheet" />
 <style>
+/* ============================================================
+   VIATERRA — MAP STYLES
+   Keep all map CSS inside this <style> element.
+   ============================================================ */
 
-  :root { --sea:#67C7D8; --navy:#214D5B; --ivory:#F5F0E4; --gold:#BC985F; }
-  * { box-sizing:border-box; }
-  html,body { margin:0;height:100%;background:var(--sea);font-family:Georgia,'Times New Roman',serif; }
-  
+/* 1. Palette and basic layout */
+:root {
+    --sea: #67C7D8;
+    --navy: #214D5B;
+    --ivory: #F5F0E4;
+    --gold: #BC985F;
+}
 
-/* Stable, restrained frame. Decorative ornaments can be added later. */
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    height: 100%;
+    background: var(--sea);
+    font-family: Georgia, "Times New Roman", serif;
+}
+
+/* 2. Interactive map and its simple, stable frame */
 .frame {
     position: relative;
     width: 100%;
@@ -31,10 +50,13 @@ _MAP_HTML = r"""<!doctype html>
     border-radius: 4px;
 }
 
+#map {
+    width: 100%;
+    height: 100%;
+}
 
-
-  /* Decorative chart engraving; never intercepts map clicks or gestures. */
-  .nautical-boat {
+/* 3. Sailing boat: decorative only, does not intercept map input */
+.nautical-boat {
     position: absolute;
     left: 65%;
     bottom: 38px;
@@ -42,31 +64,105 @@ _MAP_HTML = r"""<!doctype html>
     height: auto;
     z-index: 2;
     pointer-events: none;
-    opacity: .78;
-    filter: drop-shadow(0 1px 0 rgba(18,64,78,.08));
-  }
-  @media (max-width: 640px) {
-    .nautical-boat { width: 100px; left: 60%; bottom: 34px; opacity: .68; }
-  }
-  #map {height:100%;width:100%;}
-  .titleplate {position:absolute;top:18px;left:18px;z-index:2;padding:10px 15px;background:rgba(250,247,238,.94);border:1px solid #CBC4B0;border-radius:5px;pointer-events:none;box-shadow:0 1px 6px rgba(21,62,70,.08);}
-  .eyebrow {font:10px system-ui,sans-serif;letter-spacing:2.2px;color:#97734B;margin-bottom:5px;}
-  .titleplate strong {font-size:20px;color:var(--navy);font-weight:500;}
-  .legend {position:absolute;bottom:14px;left:14px;z-index:2;display:flex;align-items:center;gap:7px;background:rgba(250,247,238,.95);border:1px solid #D3C9B4;border-radius:5px;padding:7px 10px;color:#45616A;font:11px system-ui,sans-serif;}
-  .legend svg {width:18px;height:18px;flex:none;}
-  .maplibregl-popup-content {padding:12px 14px;background:#FBF8F0;color:#254C60;border:1px solid #C6C7B8;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.14);}
-  .maplibregl-popup-close-button {font-size:18px;color:#45636B;}
-  .place-name {font:600 14px system-ui,sans-serif;margin-right:12px;line-height:1.4;}
-  .place-meta {font:11px system-ui,sans-serif;letter-spacing:.05em;margin-top:5px;color:#8A755D;}
-  .maplibregl-ctrl-group {border:1px solid #C6CBC0;background:#FAF8F2;}
-  .maplibregl-ctrl-attrib {font-size:10px !important;}
-  .error {position:absolute;top:45%;left:8%;right:8%;text-align:center;color:#613E3E;background:#FFF9F3;padding:20px;z-index:5;display:none;}
-  @media (max-width:640px) {.titleplate{top:10px;left:10px;padding:8px 10px}.titleplate strong{font-size:15px}.eyebrow{font-size:8px}.legend{bottom:8px;left:8px;}}
+    opacity: 0.78;
+    filter: drop-shadow(0 1px 0 rgba(18, 64, 78, 0.08));
+}
+
+/* 4. Bottom-right legend: above MapLibre's attribution */
+.legend {
+    position: absolute;
+    right: 14px;
+    bottom: 38px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 10px;
+    background: rgba(250, 247, 238, 0.95);
+    border: 1px solid #D3C9B4;
+    border-radius: 5px;
+    color: #45616A;
+    font: 11px system-ui, sans-serif;
+    white-space: nowrap;
+}
+
+.legend svg {
+    width: 18px;
+    height: 18px;
+    flex: none;
+}
+
+/* 5. MapLibre popup and built-in controls */
+.maplibregl-popup-content {
+    padding: 12px 14px;
+    background: #FBF8F0;
+    color: #254C60;
+    border: 1px solid #C6C7B8;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+}
+
+.maplibregl-popup-close-button {
+    font-size: 18px;
+    color: #45636B;
+}
+
+.place-name {
+    font: 600 14px system-ui, sans-serif;
+    margin-right: 12px;
+    line-height: 1.4;
+}
+
+.place-meta {
+    font: 11px system-ui, sans-serif;
+    letter-spacing: 0.05em;
+    margin-top: 5px;
+    color: #8A755D;
+}
+
+.maplibregl-ctrl-group {
+    border: 1px solid #C6CBC0;
+    background: #FAF8F2;
+}
+
+.maplibregl-ctrl-attrib {
+    font-size: 10px !important;
+}
+
+/* 6. Visible only when the map fails to load */
+.error {
+    position: absolute;
+    top: 45%;
+    left: 8%;
+    right: 8%;
+    z-index: 5;
+    display: none;
+    padding: 20px;
+    text-align: center;
+    color: #613E3E;
+    background: #FFF9F3;
+}
+
+/* 7. Small screens */
+@media (max-width: 640px) {
+    .nautical-boat {
+        left: 60%;
+        bottom: 34px;
+        width: 100px;
+        opacity: 0.68;
+    }
+
+    .legend {
+        right: 8px;
+        bottom: 36px;
+    }
+}
 </style>
 </head>
 <body>
+<!-- Map layout. The legend and boat float over the interactive map. -->
 <div class="frame">
-  <div id="map" role="application" aria-label="Interactive maritime atlas of individually marked visited places"></div>
+    <div id="map" role="application" aria-label="Interactive maritime atlas of individually marked visited places"></div>
   <!-- Fixed cartographic ornament: not a geographic pin or map feature. -->
   <svg class="nautical-boat" viewBox="0 0 220 136" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
     <g fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -87,11 +183,17 @@ _MAP_HTML = r"""<!doctype html>
       <path d="M12 107 Q22 103 33 107 M179 106 Q194 101 209 106" stroke="#B9D9D7" stroke-width=".9" opacity=".75"/>
     </g>
   </svg>
-  <div class="titleplate"><div class="eyebrow">✦ VIATERRA ✦</div><strong>Where I Have Wandered</strong></div>
-  <div class="legend">
-    <svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15" fill="#FCF7EC" stroke="#214D5B" stroke-width="2.4"/><circle cx="18" cy="18" r="12" fill="none" stroke="#B99761" stroke-width="1"/><path d="M14 9 V27" stroke="#214D5B" stroke-width="2.2" stroke-linecap="round"/><path d="M16 10 L26 13.5 L16 18 Z" fill="#B86D59" stroke="#8C4C41" stroke-width="0.8"/><circle cx="14" cy="9" r="1.6" fill="#B99761"/></svg>
-    Places visited
-  </div>
+    <!-- This marker key is intentionally positioned at bottom-right via .legend. -->
+    <div class="legend">
+        <svg viewBox="0 0 40 40" aria-hidden="true">
+            <circle cx="20" cy="20" r="18"
+                    fill="#245A76" stroke="#FFFCF5" stroke-width="3" />
+            <path d="M15 11 V29" fill="none" stroke="#FFFFFF"
+                  stroke-width="2.8" stroke-linecap="round" />
+            <path d="M17.5 12 L29 15.5 L17.5 20 Z" fill="#FFFFFF" />
+        </svg>
+        Where I Have Wandered
+    </div>
   <div id="error" class="error">The map couldn't load its base tiles. Check internet access and the browser console.</div>
 </div>
 <script type="module">
@@ -120,15 +222,24 @@ map.addControl(new maplibregl.AttributionControl({compact: true}), 'bottom-right
 const error = document.getElementById('error');
 map.on('error', e => { if (!map.isStyleLoaded() && e.error) error.style.display = 'block'; });
 
-// Circular nautical marker: 36px SVG registered at pixelRatio 2 (18px on screen).
+// Circular nautical marker: 40px SVG registered at pixelRatio 2 (20px before icon-size).
 // Each location remains an independent point, without clustering.
-const burgeeSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
-  <circle cx="18" cy="18" r="15" fill="#FCF7EC" stroke="#214D5B" stroke-width="2.4"/>
-  <circle cx="18" cy="18" r="12" fill="none" stroke="#B99761" stroke-width="1"/>
-  <path d="M14 9 V27" fill="none" stroke="#214D5B" stroke-width="2.2" stroke-linecap="round"/>
-  <path d="M16 10 L26 13.5 L16 18 Z" fill="#B86D59" stroke="#8C4C41" stroke-width="0.8" stroke-linejoin="round"/>
-  <circle cx="14" cy="9" r="1.6" fill="#B99761"/>
-</svg>`;
+
+const burgeeSvg = `<svg xmlns="http://www.w3.org/2000/svg"
+      width="40" height="40" viewBox="0 0 40 40">
+      <circle cx="20" cy="20" r="18"
+        fill="#245A76"
+        stroke="#FFFCF5"
+        stroke-width="3"/>
+      <path d="M15 11 V29"
+        fill="none"
+        stroke="#FFFFFF"
+        stroke-width="2.8"
+        stroke-linecap="round"/>
+      <path d="M17.5 12 L29 15.5 L17.5 20 Z"
+        fill="#FFFFFF"/>
+    </svg>`;
+
 
 // One seamless, gently sunlit sea texture. All frequency terms are periodic,
 // so the image tiles without seams. Generated locally in the browser; no asset URL.
@@ -218,13 +329,13 @@ function applyMaritimeStyle() {
 
 function addBurgeeLayer(image) {
   map.addImage('viaterra-burgee', image, {pixelRatio: 2});
-  // No clustering: every one of the 1,467 saved positions is its own feature.
+  // No clustering: each saved position remains its own feature.
   map.addSource('visited-places', {type: 'geojson', data: geojson, cluster: false});
   map.addLayer({
     id: 'burgee-pins', type: 'symbol', source: 'visited-places',
     layout: {
       'icon-image': 'viaterra-burgee',
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 1, 0.83, 5, 0.93, 10, 1.05, 15, 1.13],
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 1, 0.85, 5, 0.95, 10, 1.1, 15, 1.2],
       'icon-anchor': 'center',
       'icon-allow-overlap': true,
       'icon-ignore-placement': true,
@@ -278,7 +389,10 @@ def render_atlas_map() -> None:
     try:
         places = get_visited_places()
     except Exception:
-        st.error("Viaterra couldn't load visited places from Neon. Check the database connection.")
+        st.error(
+            "Viaterra couldn't load visited places from Neon. "
+            "Check the database connection."
+        )
         return
 
     if not places:

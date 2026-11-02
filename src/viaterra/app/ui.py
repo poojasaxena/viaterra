@@ -136,7 +136,7 @@ def render_header() -> None:
 
             .viaterra-left-illustration {{
                 position: absolute;
-                top: -10px;
+                top: -26px;
                 left: 0;
                 width: 215px;
                 height: 215px;
