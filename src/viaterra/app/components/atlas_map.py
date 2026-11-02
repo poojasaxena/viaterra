@@ -4,7 +4,10 @@ import json
 
 import streamlit as st
 import streamlit.components.v1 as components
-
+import base64
+import tomllib
+from pathlib import Path
+from viaterra.processing.paths import SAILBOAT_VINTAGE
 from viaterra.db.queries import get_visited_places
 
 
@@ -164,25 +167,14 @@ body {
 <div class="frame">
     <div id="map" role="application" aria-label="Interactive maritime atlas of individually marked visited places"></div>
   <!-- Fixed cartographic ornament: not a geographic pin or map feature. -->
-  <svg class="nautical-boat" viewBox="0 0 220 136" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
-    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-      <!-- A small hand-inked sailing vessel. -->
-      <path d="M111 18 L111 99" stroke="#194E61" stroke-width="1.35"/>
-      <path d="M106 22 L110 22 L110 93" stroke="#D6E6DE" stroke-width=".75"/>
-      <path d="M108 23 Q76 49 69 89 Q87 94 106 92 Z" fill="#F5EAD8" fill-opacity=".86" stroke="#25596A" stroke-width="1.25"/>
-      <path d="M114 31 Q137 50 153 91 L114 94 Z" fill="#E8E4D3" fill-opacity=".84" stroke="#25596A" stroke-width="1.25"/>
-      <path d="M107 28 Q88 60 78 86 M120 45 Q138 70 145 89" stroke="#6B99A0" stroke-width=".75" opacity=".65"/>
-      <path d="M110 14 L123 17 L110 20" fill="#C2A16F" stroke="#C2A16F" stroke-width=".7"/>
-      <path d="M52 97 Q110 107 169 96 L157 108 Q109 121 65 108 Z" fill="#245D70" fill-opacity=".85" stroke="#E5E4D5" stroke-width="1.1"/>
-      <path d="M69 104 Q107 113 151 104" stroke="#D3E2DB" stroke-width=".85" opacity=".9"/>
-      <path d="M64 97 L159 97" stroke="#D3E2DB" stroke-width="1"/>
-      <!-- Loose, non-repeating strokes evoke water rather than a sine wave. -->
-      <path d="M4 116 Q19 111 34 115 T66 115 Q82 111 96 116 T128 115 Q146 110 162 116 T207 114" stroke="#E8F0E8" stroke-width="1.6" opacity=".95"/>
-      <path d="M24 124 Q43 120 61 124 Q78 128 92 124 M112 125 Q134 120 154 124 T213 124" stroke="#D0E6E5" stroke-width="1.15" opacity=".9"/>
-      <path d="M49 132 Q68 129 83 132 M138 132 Q159 129 176 132" stroke="#A9CFD1" stroke-width=".9" opacity=".85"/>
-      <path d="M12 107 Q22 103 33 107 M179 106 Q194 101 209 106" stroke="#B9D9D7" stroke-width=".9" opacity=".75"/>
-    </g>
-  </svg>
+
+<img
+    class="nautical-boat"
+    src="data:image/png;base64,__SAILBOAT__"
+    alt=""
+    aria-hidden="true"
+>
+
     <!-- This marker key is intentionally positioned at bottom-right via .legend. -->
     <div class="legend">
         <svg viewBox="0 0 40 40" aria-hidden="true">
@@ -383,6 +375,16 @@ map.on('load', () => {
 </html>
 """
 
+def get_map_height() -> int:
+    """Read the map height from the project configuration."""
+
+    config_path = Path(__file__).resolve().parents[4] / "config.toml"
+
+    with config_path.open("rb") as file:
+        config = tomllib.load(file)
+
+    return int(config.get("map", {}).get("height", 560))
+
 
 def render_atlas_map() -> None:
     """Render a wide nautical map of places already imported into Neon."""
@@ -403,4 +405,13 @@ def render_atlas_map() -> None:
     safe_json = json.dumps(places, ensure_ascii=True, separators=(",", ":"))
     safe_json = safe_json.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     html = _MAP_HTML.replace("__PLACES__", safe_json)
-    components.html(html, height=660, scrolling=False)
+    boat_base64 = base64.b64encode(
+    SAILBOAT_VINTAGE.read_bytes()
+    ).decode("ascii")
+
+    html = html.replace("__SAILBOAT__", boat_base64)
+    components.html(
+        html,
+        height=get_map_height(),
+        scrolling=False,
+    )

@@ -17,12 +17,17 @@ ASSETS_DIR = DATA_DIR / "assets"
 HEADER_DIR = ASSETS_DIR / "header"
 BRANDING_DIR = ASSETS_DIR / "branding"
 GALLERY_DIR = DATA_DIR / "gallary"
+ILLUSTRATIONS_DIR = ASSETS_DIR / "illustrations"
 
 ANCHOR_OCTOPUS = BRANDING_DIR / "anchor_octopus.png"
 ANCHOR_DOLPHIN = BRANDING_DIR / "anchor_dolphin_octopus.png"
 ANCHOR_BIRDS = BRANDING_DIR / "anchor_birds.png" # preferable
 AUTHOR_LOGO = BRANDING_DIR / "author_logo.svg"
 MARITIME_LOGO = BRANDING_DIR / "anchor_maritime.png"
+
+SAILBOAT_VINTAGE =  ILLUSTRATIONS_DIR / "sailboat_vintage.png"
+SAILBOAT_PENNANT = ILLUSTRATIONS_DIR / "sailboat_pennant.png"
+SAILBOAT_MEDITERRANEAN = ILLUSTRATIONS_DIR / "sailboat_mediterranean.png"
 
 LEFT_HEADER_IMAGE = MARITIME_LOGO
 

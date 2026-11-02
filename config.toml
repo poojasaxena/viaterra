@@ -14,3 +14,12 @@ background = "#F8F4EB"
 primary = "#17466C"
 secondary = "#557786"
 accent = "#C7A165"
+
+[map]
+height = 640
+
+[map.sea]
+base = "#74D7EA"
+deep = "#59BDD2"
+highlight = "#DFF7FA"
+texture_opacity = 0.08
