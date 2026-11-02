@@ -75,7 +75,7 @@ def render_navigation(active_page: str) -> None:
         align-items: center;
         justify-content: center;
         flex-wrap: wrap;
-        gap: 0.35rem;
+        gap: 0.95rem;
         line-height: 1.2;
     }}
 
