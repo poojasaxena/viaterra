@@ -5,9 +5,10 @@ import json
 import streamlit as st
 import streamlit.components.v1 as components
 import base64
-import tomllib
-from pathlib import Path
-from viaterra.processing.paths import SAILBOAT_VINTAGE
+from viaterra.processing.paths import (
+    SAILBOAT_VINTAGE,
+    load_config,
+)
 from viaterra.db.queries import get_visited_places
 
 
@@ -25,7 +26,7 @@ _MAP_HTML = r"""<!doctype html>
 
 /* 1. Palette and basic layout */
 :root {
-    --sea: #67C7D8;
+    --sea: __SEA_COLOR__;
     --navy: #214D5B;
     --ivory: #F5F0E4;
     --gold: #BC985F;
@@ -192,6 +193,15 @@ body {
 import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs';
 
 const points = __PLACES__;
+
+const SEA_CONFIG = __SEA_SETTINGS__;
+
+const SEA_RGB = [
+    parseInt(SEA_CONFIG.color.slice(1, 3), 16),
+    parseInt(SEA_CONFIG.color.slice(3, 5), 16),
+    parseInt(SEA_CONFIG.color.slice(5, 7), 16),
+];
+
 const geojson = {
   type: 'FeatureCollection',
   features: points.map((p, i) => ({
@@ -257,12 +267,30 @@ function createSeaTexture() {
                       * Math.cos(5 * v + 0.35 * Math.sin(u));
       const glint = Math.pow(Math.max(0, Math.sin(17 * u + 3 * v)
                       * Math.cos(7 * v - 2 * u)), 10);
-      const value = broad * 13 + waviness * 4;
+
+
+      const value =
+          broad * SEA_CONFIG.broad_strength
+          + waviness * SEA_CONFIG.ripple_strength;
+
       const idx = (y * size + x) * 4;
-      pixels.data[idx] = clamp(103 + value + glint * 7);
-      pixels.data[idx + 1] = clamp(199 + value * .72 + glint * 10);
-      pixels.data[idx + 2] = clamp(216 + value * .65 + glint * 10);
+
+      pixels.data[idx] = clamp(
+          SEA_RGB[0] + value + glint * SEA_CONFIG.glint_red
+      );
+
+      pixels.data[idx + 1] = clamp(
+          SEA_RGB[1] + value * 0.72
+          + glint * SEA_CONFIG.glint_green_blue
+      );
+
+      pixels.data[idx + 2] = clamp(
+          SEA_RGB[2] + value * 0.65
+          + glint * SEA_CONFIG.glint_green_blue
+      );
+
       pixels.data[idx + 3] = 255;
+
     }
   }
   return pixels;
@@ -281,7 +309,7 @@ function applyMaritimeStyle() {
         map.setLayoutProperty(layer.id, 'visibility', 'none');
       } else if (layer.type === 'fill') {
         if (id.includes('water') || src === 'water') {
-          map.setPaintProperty(layer.id, 'fill-color', '#67C7D8');
+          map.setPaintProperty(layer.id, 'fill-color', SEA_CONFIG.color);
           if (map.hasImage('viaterra-sea-texture')) {
             map.setPaintProperty(layer.id, 'fill-pattern', 'viaterra-sea-texture');
           }
@@ -293,7 +321,7 @@ function applyMaritimeStyle() {
         }
       } else if (layer.type === 'line') {
         if (id.includes('water') || src.includes('water')) {
-          map.setPaintProperty(layer.id, 'line-color', '#67C7D8');
+          map.setPaintProperty(layer.id, 'line-color', SEA_CONFIG.color);
         } else if (/boundary|admin|border|coast/.test(id)) {
           map.setPaintProperty(layer.id, 'line-color', '#C4B8A0');
           map.setPaintProperty(layer.id, 'line-opacity', 0.65);
@@ -375,19 +403,26 @@ map.on('load', () => {
 </html>
 """
 
-def get_map_height() -> int:
-    """Read the map height from the project configuration."""
-
-    config_path = Path(__file__).resolve().parents[4] / "config.toml"
-
-    with config_path.open("rb") as file:
-        config = tomllib.load(file)
-
-    return int(config.get("map", {}).get("height", 560))
-
 
 def render_atlas_map() -> None:
-    """Render a wide nautical map of places already imported into Neon."""
+    """Render the nautical atlas using centralized configuration."""
+
+    # Application configuration
+    config = load_config()
+    map_config = config.get("map", {})
+    sea_config = map_config.get("sea", {})
+
+    map_height = int(map_config.get("height", 560))
+
+    sea_settings = {
+        "color": sea_config.get("color", "#60AEC3"),
+        "broad_strength": sea_config.get("broad_strength", 6.0),
+        "ripple_strength": sea_config.get("ripple_strength", 1.5),
+        "glint_red": sea_config.get("glint_red", 3.0),
+        "glint_green_blue": sea_config.get("glint_green_blue", 4.0),
+    }
+
+    # Load visited locations
     try:
         places = get_visited_places()
     except Exception:
@@ -401,17 +436,48 @@ def render_atlas_map() -> None:
         st.info("No geolocated places are available in Neon yet.")
         return
 
-    # JSON is embedded only as a JavaScript literal; escape HTML-sensitive characters.
-    safe_json = json.dumps(places, ensure_ascii=True, separators=(",", ":"))
-    safe_json = safe_json.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-    html = _MAP_HTML.replace("__PLACES__", safe_json)
+    # Prepare location data
+    safe_json = json.dumps(
+        places,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+
+    safe_json = (
+        safe_json
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+
+    # Load the decorative sailboat
     boat_base64 = base64.b64encode(
-    SAILBOAT_VINTAGE.read_bytes()
+        SAILBOAT_VINTAGE.read_bytes()
     ).decode("ascii")
 
-    html = html.replace("__SAILBOAT__", boat_base64)
+    # Inject data and configuration into the map template
+    html = _MAP_HTML
+
+    html = html.replace("__PLACES__", safe_json)
+
+    html = html.replace(
+        "__SEA_SETTINGS__",
+        json.dumps(sea_settings),
+    )
+
+    html = html.replace(
+        "__SEA_COLOR__",
+        sea_settings["color"],
+    )
+
+    html = html.replace(
+        "__SAILBOAT__",
+        boat_base64,
+    )
+
+    # Render the map
     components.html(
         html,
-        height=get_map_height(),
+        height=map_height,
         scrolling=False,
     )
