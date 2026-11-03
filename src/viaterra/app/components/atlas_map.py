@@ -328,6 +328,15 @@ function applyMaritimeStyle() {
     try {
       if (layer.type === 'background') {
         map.setPaintProperty(layer.id, 'background-color', '#F3E9D5');
+
+        if (map.hasImage('viaterra-land-wash')) {
+            map.setPaintProperty(
+                layer.id,
+                'background-pattern',
+                'viaterra-land-wash'
+            );
+        }
+
       } else if (layer.type === 'hillshade' || layer.type === 'raster' || layer.type === 'color-relief' || layer.type === 'fill-extrusion') {
         map.setLayoutProperty(layer.id, 'visibility', 'none');
       } else if (layer.type === 'fill') {
@@ -340,6 +349,13 @@ function applyMaritimeStyle() {
         } else {
           // Eliminate landcover, park, woodland and other textured shading.
           map.setPaintProperty(layer.id, 'fill-color', '#F3E9D5');
+          if (map.hasImage('viaterra-land-wash')) {
+            map.setPaintProperty(
+                layer.id,
+                'fill-pattern',
+                'viaterra-land-wash'
+            );
+        }
           map.setPaintProperty(layer.id, 'fill-opacity', 1);
         }
       } else if (layer.type === 'line') {
@@ -369,6 +385,71 @@ function applyMaritimeStyle() {
     } catch (e) { /* Tolerate style-specific layer differences. */ }
   }
 }
+
+/* Warm, softly mottled watercolor wash for the land */
+function createLandTexture() {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D unavailable');
+
+    const image = ctx.createImageData(size, size);
+    const clamp = v => Math.max(0, Math.min(255, Math.round(v)));
+
+    // Repeatable noise with matching edges, so the wash tiles.
+    function hash(x, y) {
+        const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+        return n - Math.floor(n);
+    }
+
+    function noise(x, y, frequency) {
+        const px = x * frequency / size;
+        const py = y * frequency / size;
+
+        const ix = Math.floor(px);
+        const iy = Math.floor(py);
+
+        const fx = px - ix;
+        const fy = py - iy;
+
+        const sx = fx * fx * (3 - 2 * fx);
+        const sy = fy * fy * (3 - 2 * fy);
+
+        const sample = (dx, dy) => hash(
+            (ix + dx) % frequency,
+            (iy + dy) % frequency
+        );
+
+        const top = sample(0, 0) * (1 - sx) + sample(1, 0) * sx;
+        const bottom = sample(0, 1) * (1 - sx) + sample(1, 1) * sx;
+
+        return top * (1 - sy) + bottom * sy;
+    }
+
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+
+            // Broad pigment clouds, fine washes, paper grain.
+            const wash =
+                (noise(x, y, 4) - 0.5) * 36 +
+                (noise(x, y, 11) - 0.5) * 20 +
+                (noise(x, y, 27) - 0.5) * 8;
+
+            const grain = (hash(x + 73, y + 19) - 0.5) * 9;
+            const i = (y * size + x) * 4;
+
+            image.data[i]     = clamp(243 + wash * 0.7 + grain);
+            image.data[i + 1] = clamp(233 + wash * 0.95 + grain);
+            image.data[i + 2] = clamp(213 + wash * 1.1 + grain);
+            image.data[i + 3] = 255;
+        }
+    }
+
+    return image;
+}
+
 
 function addBurgeeLayer(image) {
   map.addImage('viaterra-burgee', image, {pixelRatio: 2});
@@ -408,24 +489,68 @@ function addBurgeeLayer(image) {
 }
 
 map.on('load', () => {
-  error.style.display = 'none';
-  // Register before assigning fill-pattern to water layers.
-  try {
-    map.addImage('viaterra-sea-texture', createSeaTexture(), {pixelRatio: 1});
-  } catch (e) {
-    console.warn('Sea texture unavailable; retaining flat sea color.', e);
-  }
-  applyMaritimeStyle();
-  const image = new Image();
-  image.onload = () => addBurgeeLayer(image);
-  image.onerror = () => {error.textContent = 'The map marker could not be loaded.'; error.style.display = 'block';};
-  image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(burgeeSvg);
+    error.style.display = 'none';
+
+    // -------------------------------------------------
+    // 1. Register the sea texture
+    // -------------------------------------------------
+    try {
+        map.addImage(
+            'viaterra-sea-texture',
+            createSeaTexture(),
+            { pixelRatio: 1 }
+        );
+    } catch (e) {
+        console.warn(
+            'Sea texture unavailable; retaining flat sea color.',
+            e
+        );
+    }
+
+    // -------------------------------------------------
+    // 2. Register the watercolor land texture
+    // -------------------------------------------------
+    try {
+        map.addImage(
+            'viaterra-land-wash',
+            createLandTexture(),
+            { pixelRatio: 1 }
+        );
+    } catch (e) {
+        console.warn(
+            'Land watercolor texture unavailable; retaining flat land color.',
+            e
+        );
+    }
+
+    // -------------------------------------------------
+    // 3. Apply maritime styling
+    // Both textures must be registered first.
+    // -------------------------------------------------
+    applyMaritimeStyle();
+
+    // -------------------------------------------------
+    // 4. Load and display visited-place markers
+    // -------------------------------------------------
+    const image = new Image();
+
+    image.onload = () => {
+        addBurgeeLayer(image);
+    };
+
+    image.onerror = () => {
+        error.textContent = 'The map marker could not be loaded.';
+        error.style.display = 'block';
+    };
+
+    image.src =
+        'data:image/svg+xml;charset=utf-8,'
+        + encodeURIComponent(burgeeSvg);
 });
 </script>
 </body>
 </html>
 """
-
 
 def render_atlas_map() -> None:
     """Render the nautical atlas using centralized configuration."""

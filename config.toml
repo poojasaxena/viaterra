@@ -20,7 +20,7 @@ height = 640
 
 [map.sea]
 color = "#60AEC3"
-broad_strength = 6.0
-ripple_strength = 1.5
+broad_strength = 22.0
+ripple_strength = 3.0
 glint_red = 3.0
 glint_green_blue = 4.0
