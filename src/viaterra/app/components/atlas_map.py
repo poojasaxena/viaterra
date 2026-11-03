@@ -268,10 +268,11 @@ const burgeeSvg = `<svg xmlns="http://www.w3.org/2000/svg"
 
 
 /*
- * Viaterra sea: turquoise watercolor and gentle ripples.
+ * VIATERRA — Organic watercolor sea
  *
- * Palette and texture strength are controlled by config.toml.
- * All wave frequencies are periodic so the texture tiles cleanly.
+ * Soft pigment variation rather than repeated wave marks.
+ * Uses the sea palette from config.toml.
+ * Texture is seamless and repeats without hard tile edges.
  */
 function createSeaTexture() {
     const size = 256;
@@ -279,12 +280,11 @@ function createSeaTexture() {
     canvas.width = canvas.height = size;
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Canvas 2D is unavailable');
+    if (!ctx) throw new Error('Canvas 2D unavailable');
 
     const pixels = ctx.createImageData(size, size);
-    const tau = Math.PI * 2;
 
-    const clamp = (v, min, max) =>
+    const clamp = (v, min = 0, max = 255) =>
         Math.max(min, Math.min(max, v));
 
     const rgb = hex => [
@@ -298,67 +298,79 @@ function createSeaTexture() {
     const light = rgb(SEA_CONFIG.light_color);
 
     const lerp = (a, b, t) => a + (b - a) * t;
+    const smooth = t => t * t * (3 - 2 * t);
+
+    // Deterministic, tileable noise.
+    function hash(x, y) {
+        const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+        return n - Math.floor(n);
+    }
+
+    function noise(x, y, fx, fy) {
+        const px = x * fx / size;
+        const py = y * fy / size;
+
+        const ix = Math.floor(px);
+        const iy = Math.floor(py);
+
+        const sx = smooth(px - ix);
+        const sy = smooth(py - iy);
+
+        const sample = (dx, dy) => {
+            const nx = ((ix + dx) % fx + fx) % fx;
+            const ny = ((iy + dy) % fy + fy);
+            return hash(nx, ny);
+        };
+
+        const top = lerp(sample(0, 0), sample(1, 0), sx);
+        const bottom = lerp(sample(0, 1), sample(1, 1), sx);
+
+        return lerp(top, bottom, sy);
+    }
 
     for (let y = 0; y < size; y++) {
-        const v = tau * y / size;
-
         for (let x = 0; x < size; x++) {
-            const u = tau * x / size;
 
-            // Broad, gently shifting turquoise pigment.
+            // Gently distort the pigment shapes so they
+            // don't resemble a regular geometric pattern.
+            const warp = (
+                noise(x, y, 2, 2) - 0.5
+            ) * 28;
+
+            // Broad watercolor washes at multiple scales.
             const broad =
-                0.50 * Math.sin(2 * u + 0.8 * Math.cos(v)) +
-                0.35 * Math.sin(u + 2 * v + 0.45) +
-                0.25 * Math.cos(3 * v - 2 * u);
+                (noise(x + warp, y, 3, 3) - 0.5) * 0.70 +
+                (noise(x, y + warp, 7, 5) - 0.5) * 0.30;
 
-            // Fine, elongated ripples across the water.
-            const ripple =
-                Math.sin(13 * u + 1.2 * Math.sin(3 * v)) *
-                Math.cos(5 * v + 0.35 * Math.sin(u));
+            // Very fine irregular pigment variation.
+            const fine =
+                noise(x, y, 17, 13) - 0.5;
 
-            // Occasional sunlight catching the surface.
-            const glint = Math.pow(
-                Math.max(
-                    0,
-                    Math.sin(17 * u + 3 * v) *
-                    Math.cos(7 * v - 2 * u)
-                ),
-                10
-            );
+            // Color variation: no bright repeated glints.
 
-            // Blend between deep, base and light sea colors.
             const tone = clamp(
                 0.5 +
-                broad * SEA_CONFIG.broad_strength / 100 +
-                ripple * SEA_CONFIG.ripple_strength / 30 +
-                glint * 0.16,
+                broad * SEA_CONFIG.broad_strength / 7 +
+                fine * SEA_CONFIG.ripple_strength / 100,
                 0,
                 1
             );
 
+
             const from = tone < 0.5 ? deep : base;
             const to = tone < 0.5 ? base : light;
-            const blend = tone < 0.5 ? tone * 2 : (tone - 0.5) * 2;
+
+            const blend = tone < 0.5
+                ? tone * 2
+                : (tone - 0.5) * 2;
 
             const i = (y * size + x) * 4;
 
-            pixels.data[i] = clamp(
-                Math.round(lerp(from[0], to[0], blend)
-                    + glint * SEA_CONFIG.glint_red),
-                0, 255
-            );
-
-            pixels.data[i + 1] = clamp(
-                Math.round(lerp(from[1], to[1], blend)
-                    + glint * SEA_CONFIG.glint_green_blue),
-                0, 255
-            );
-
-            pixels.data[i + 2] = clamp(
-                Math.round(lerp(from[2], to[2], blend)
-                    + glint * SEA_CONFIG.glint_green_blue),
-                0, 255
-            );
+            for (let channel = 0; channel < 3; channel++) {
+                pixels.data[i + channel] = Math.round(
+                    lerp(from[channel], to[channel], blend)
+                );
+            }
 
             pixels.data[i + 3] = 255;
         }
