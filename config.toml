@@ -18,9 +18,12 @@ accent = "#C7A165"
 [map]
 height = 640
 
+
 [map.sea]
-color = "#60AEC3"
-broad_strength = 22.0
-ripple_strength = 3.0
-glint_red = 3.0
-glint_green_blue = 4.0
+color = "#438FA6"
+deep_color = "#367A91"
+light_color = "#65AABB"
+broad_strength = 12.0
+ripple_strength = 0.0
+glint_red = 0.0
+glint_green_blue = 0.0

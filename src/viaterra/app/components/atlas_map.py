@@ -266,58 +266,107 @@ const burgeeSvg = `<svg xmlns="http://www.w3.org/2000/svg"
     </svg>`;
 
 
-// One seamless, gently sunlit sea texture. All frequency terms are periodic,
-// so the image tiles without seams. Generated locally in the browser; no asset URL.
+
+/*
+ * Viaterra sea: turquoise watercolor and gentle ripples.
+ *
+ * Palette and texture strength are controlled by config.toml.
+ * All wave frequencies are periodic so the texture tiles cleanly.
+ */
 function createSeaTexture() {
-  const size = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas 2D is not available');
-  const pixels = ctx.createImageData(size, size);
-  const tau = Math.PI * 2;
-  const clamp = v => Math.max(0, Math.min(255, Math.round(v)));
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
 
-  for (let y = 0; y < size; y++) {
-    const v = tau * y / size;
-    for (let x = 0; x < size; x++) {
-      const u = tau * x / size;
-      // Broad, gently varying water tones, then fine, wind-stretched ripples.
-      const broad = 0.50 * Math.sin(u * 2 + 0.8 * Math.cos(v))
-                  + 0.35 * Math.sin(u + 2 * v + 0.45)
-                  + 0.25 * Math.cos(3 * v - 2 * u);
-      const waviness = Math.sin(13 * u + 1.2 * Math.sin(3 * v))
-                      * Math.cos(5 * v + 0.35 * Math.sin(u));
-      const glint = Math.pow(Math.max(0, Math.sin(17 * u + 3 * v)
-                      * Math.cos(7 * v - 2 * u)), 10);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D is unavailable');
 
+    const pixels = ctx.createImageData(size, size);
+    const tau = Math.PI * 2;
 
-      const value =
-          broad * SEA_CONFIG.broad_strength
-          + waviness * SEA_CONFIG.ripple_strength;
+    const clamp = (v, min, max) =>
+        Math.max(min, Math.min(max, v));
 
-      const idx = (y * size + x) * 4;
+    const rgb = hex => [
+        parseInt(hex.slice(1, 3), 16),
+        parseInt(hex.slice(3, 5), 16),
+        parseInt(hex.slice(5, 7), 16)
+    ];
 
-      pixels.data[idx] = clamp(
-          SEA_RGB[0] + value + glint * SEA_CONFIG.glint_red
-      );
+    const deep = rgb(SEA_CONFIG.deep_color);
+    const base = rgb(SEA_CONFIG.color);
+    const light = rgb(SEA_CONFIG.light_color);
 
-      pixels.data[idx + 1] = clamp(
-          SEA_RGB[1] + value * 0.72
-          + glint * SEA_CONFIG.glint_green_blue
-      );
+    const lerp = (a, b, t) => a + (b - a) * t;
 
-      pixels.data[idx + 2] = clamp(
-          SEA_RGB[2] + value * 0.65
-          + glint * SEA_CONFIG.glint_green_blue
-      );
+    for (let y = 0; y < size; y++) {
+        const v = tau * y / size;
 
-      pixels.data[idx + 3] = 255;
+        for (let x = 0; x < size; x++) {
+            const u = tau * x / size;
 
+            // Broad, gently shifting turquoise pigment.
+            const broad =
+                0.50 * Math.sin(2 * u + 0.8 * Math.cos(v)) +
+                0.35 * Math.sin(u + 2 * v + 0.45) +
+                0.25 * Math.cos(3 * v - 2 * u);
+
+            // Fine, elongated ripples across the water.
+            const ripple =
+                Math.sin(13 * u + 1.2 * Math.sin(3 * v)) *
+                Math.cos(5 * v + 0.35 * Math.sin(u));
+
+            // Occasional sunlight catching the surface.
+            const glint = Math.pow(
+                Math.max(
+                    0,
+                    Math.sin(17 * u + 3 * v) *
+                    Math.cos(7 * v - 2 * u)
+                ),
+                10
+            );
+
+            // Blend between deep, base and light sea colors.
+            const tone = clamp(
+                0.5 +
+                broad * SEA_CONFIG.broad_strength / 100 +
+                ripple * SEA_CONFIG.ripple_strength / 30 +
+                glint * 0.16,
+                0,
+                1
+            );
+
+            const from = tone < 0.5 ? deep : base;
+            const to = tone < 0.5 ? base : light;
+            const blend = tone < 0.5 ? tone * 2 : (tone - 0.5) * 2;
+
+            const i = (y * size + x) * 4;
+
+            pixels.data[i] = clamp(
+                Math.round(lerp(from[0], to[0], blend)
+                    + glint * SEA_CONFIG.glint_red),
+                0, 255
+            );
+
+            pixels.data[i + 1] = clamp(
+                Math.round(lerp(from[1], to[1], blend)
+                    + glint * SEA_CONFIG.glint_green_blue),
+                0, 255
+            );
+
+            pixels.data[i + 2] = clamp(
+                Math.round(lerp(from[2], to[2], blend)
+                    + glint * SEA_CONFIG.glint_green_blue),
+                0, 255
+            );
+
+            pixels.data[i + 3] = 255;
+        }
     }
-  }
-  return pixels;
+
+    return pixels;
 }
+
 
 // Overlay paints suppress the stock physical-atlas textures and draw our sea
 // and land as calm, solid nautical colors. Keep only restrained geographic labels.
@@ -563,9 +612,11 @@ def render_atlas_map() -> None:
     map_height = int(map_config.get("height", 560))
 
     sea_settings = {
-        "color": sea_config.get("color", "#60AEC3"),
-        "broad_strength": sea_config.get("broad_strength", 6.0),
-        "ripple_strength": sea_config.get("ripple_strength", 1.5),
+        "color": sea_config.get("color", "#69C7C8"),
+        "deep_color": sea_config.get("deep_color", "#4FAEB4"),
+        "light_color": sea_config.get("light_color", "#9EDDD8"),
+        "broad_strength": sea_config.get("broad_strength", 22.0),
+        "ripple_strength": sea_config.get("ripple_strength", 3.0),
         "glint_red": sea_config.get("glint_red", 3.0),
         "glint_green_blue": sea_config.get("glint_green_blue", 4.0),
     }
