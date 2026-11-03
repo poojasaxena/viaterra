@@ -73,6 +73,16 @@ body {
     filter: drop-shadow(0 1px 0 rgba(18, 64, 78, 0.08));
 }
 
+/* Weathered frame overlay */
+.frame::after {
+    content: "";
+    position: absolute;
+    inset: -8px;
+    z-index: 10;
+    pointer-events: none;
+    background: url("data:image/png;base64,__WEATHERED_FRAME__")
+                center / 100% 100% no-repeat;
+}
 
 /* Decorative compass rose */
 .nautical-compass {
@@ -684,6 +694,9 @@ def render_atlas_map() -> None:
     ).decode("ascii")
 
 
+    frame_path = COMPASS.parent / "viaterra_weathered_frame.png"
+    frame_base64 = base64.b64encode(frame_path.read_bytes()).decode("ascii")
+
     # Inject data and configuration into the map template
     html = _MAP_HTML
 
@@ -696,6 +709,7 @@ def render_atlas_map() -> None:
     html = html.replace("__MARKER_FILL__", marker_settings["fill"])
     html = html.replace("__MARKER_BORDER__", marker_settings["border"])
     html = html.replace("__MARKER_FLAG__", marker_settings["flag"])
+    html = html.replace("__WEATHERED_FRAME__", frame_base64)
 
     # Render the map
     components.html(
