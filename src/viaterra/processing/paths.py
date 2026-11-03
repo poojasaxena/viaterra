@@ -18,6 +18,7 @@ HEADER_DIR = ASSETS_DIR / "header"
 BRANDING_DIR = ASSETS_DIR / "branding"
 GALLERY_DIR = DATA_DIR / "gallary"
 ILLUSTRATIONS_DIR = ASSETS_DIR / "illustrations"
+COMPASS_DIR = ILLUSTRATIONS_DIR / "compass"
 
 ANCHOR_OCTOPUS = BRANDING_DIR / "anchor_octopus.png"
 ANCHOR_DOLPHIN = BRANDING_DIR / "anchor_dolphin_octopus.png"
@@ -28,6 +29,8 @@ MARITIME_LOGO = BRANDING_DIR / "anchor_maritime.png"
 SAILBOAT_VINTAGE =  ILLUSTRATIONS_DIR / "sailboat_vintage.png"
 SAILBOAT_PENNANT = ILLUSTRATIONS_DIR / "sailboat_pennant.png"
 SAILBOAT_MEDITERRANEAN = ILLUSTRATIONS_DIR / "sailboat_mediterranean.png"
+
+COMPASS = COMPASS_DIR / "coastal_explorer.png"
 
 LEFT_HEADER_IMAGE = MARITIME_LOGO
 

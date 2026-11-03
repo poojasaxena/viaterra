@@ -8,6 +8,7 @@ import base64
 from viaterra.processing.paths import (
     SAILBOAT_VINTAGE,
     load_config,
+    COMPASS,
 )
 from viaterra.db.queries import get_visited_places
 
@@ -27,8 +28,8 @@ _MAP_HTML = r"""<!doctype html>
 /* 1. Palette and basic layout */
 :root {
     --sea: __SEA_COLOR__;
-    --navy: #214D5B;
-    --ivory: #F5F0E4;
+    --navy: #F5F0E4;
+    --ivory: #F3E9D5;
     --gold: #BC985F;
 }
 
@@ -71,6 +72,20 @@ body {
     opacity: 0.78;
     filter: drop-shadow(0 1px 0 rgba(18, 64, 78, 0.08));
 }
+
+
+/* Decorative compass rose */
+.nautical-compass {
+    position: absolute;
+    left: 2%;
+    top: 30%;
+    width: 150px;
+    height: auto;
+    opacity: 0.78;
+    z-index: 2;
+    pointer-events: none;
+}
+
 
 /* 4. Bottom-right legend: above MapLibre's attribution */
 .legend {
@@ -175,6 +190,14 @@ body {
     alt=""
     aria-hidden="true"
 >
+
+<img
+    class="nautical-compass"
+    src="data:image/png;base64,__COMPASS__"
+    alt=""
+    aria-hidden="true"
+>
+
 
     <!-- This marker key is intentionally positioned at bottom-right via .legend. -->
     <div class="legend">
@@ -304,7 +327,7 @@ function applyMaritimeStyle() {
     const src = (layer['source-layer'] || '').toLowerCase();
     try {
       if (layer.type === 'background') {
-        map.setPaintProperty(layer.id, 'background-color', '#F5F0E4');
+        map.setPaintProperty(layer.id, 'background-color', '#F3E9D5');
       } else if (layer.type === 'hillshade' || layer.type === 'raster' || layer.type === 'color-relief' || layer.type === 'fill-extrusion') {
         map.setLayoutProperty(layer.id, 'visibility', 'none');
       } else if (layer.type === 'fill') {
@@ -316,19 +339,19 @@ function applyMaritimeStyle() {
           map.setPaintProperty(layer.id, 'fill-opacity', 1);
         } else {
           // Eliminate landcover, park, woodland and other textured shading.
-          map.setPaintProperty(layer.id, 'fill-color', '#F5F0E4');
+          map.setPaintProperty(layer.id, 'fill-color', '#F3E9D5');
           map.setPaintProperty(layer.id, 'fill-opacity', 1);
         }
       } else if (layer.type === 'line') {
         if (id.includes('water') || src.includes('water')) {
           map.setPaintProperty(layer.id, 'line-color', SEA_CONFIG.color);
         } else if (/boundary|admin|border|coast/.test(id)) {
-          map.setPaintProperty(layer.id, 'line-color', '#C4B8A0');
+          map.setPaintProperty(layer.id, 'line-color', '#BCA788');
           map.setPaintProperty(layer.id, 'line-opacity', 0.65);
         } else if (/road|street|highway|rail|bridge|tunnel/.test(id)) {
           map.setLayoutProperty(layer.id, 'visibility', 'none');
         } else {
-          map.setPaintProperty(layer.id, 'line-color', '#CEC8B8');
+          map.setPaintProperty(layer.id, 'line-color', '#D4C4AA');
           map.setPaintProperty(layer.id, 'line-opacity', 0.4);
         }
       } else if (layer.type === 'symbol') {
@@ -339,7 +362,7 @@ function applyMaritimeStyle() {
           map.setLayoutProperty(layer.id, 'visibility', 'none');
         } else {
           map.setPaintProperty(layer.id, 'text-color', '#365E67');
-          map.setPaintProperty(layer.id, 'text-halo-color', '#F5F0E4');
+          map.setPaintProperty(layer.id, 'text-halo-color', '#F3E9D5');
           map.setPaintProperty(layer.id, 'text-halo-width', 1);
         }
       }
@@ -455,25 +478,21 @@ def render_atlas_map() -> None:
         SAILBOAT_VINTAGE.read_bytes()
     ).decode("ascii")
 
+
+    ## Load decorative compass
+    compass_base64 = base64.b64encode(
+        COMPASS.read_bytes()
+    ).decode("ascii")
+
+
     # Inject data and configuration into the map template
     html = _MAP_HTML
 
+    html = html.replace("__COMPASS__", compass_base64)
     html = html.replace("__PLACES__", safe_json)
-
-    html = html.replace(
-        "__SEA_SETTINGS__",
-        json.dumps(sea_settings),
-    )
-
-    html = html.replace(
-        "__SEA_COLOR__",
-        sea_settings["color"],
-    )
-
-    html = html.replace(
-        "__SAILBOAT__",
-        boat_base64,
-    )
+    html = html.replace("__SEA_SETTINGS__", json.dumps(sea_settings), )
+    html = html.replace("__SEA_COLOR__", sea_settings["color"],)
+    html = html.replace("__SAILBOAT__", boat_base64,)
 
     # Render the map
     components.html(
