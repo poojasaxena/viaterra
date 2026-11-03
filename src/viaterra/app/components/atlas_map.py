@@ -203,10 +203,10 @@ body {
     <div class="legend">
         <svg viewBox="0 0 40 40" aria-hidden="true">
             <circle cx="20" cy="20" r="18"
-                    fill="#245A76" stroke="#FFFCF5" stroke-width="3" />
-            <path d="M15 11 V29" fill="none" stroke="#FFFFFF"
+                    fill="__MARKER_FILL__" stroke="__MARKER_BORDER__" stroke-width="3" />
+            <path d="M15 11 V29" fill="none" stroke="__MARKER_FLAG__"
                   stroke-width="2.8" stroke-linecap="round" />
-            <path d="M17.5 12 L29 15.5 L17.5 20 Z" fill="#FFFFFF" />
+            <path d="M17.5 12 L29 15.5 L17.5 20 Z" fill="__MARKER_FLAG__" />
         </svg>
         Where I Have Wandered
     </div>
@@ -250,20 +250,24 @@ map.on('error', e => { if (!map.isStyleLoaded() && e.error) error.style.display 
 // Circular nautical marker: 40px SVG registered at pixelRatio 2 (20px before icon-size).
 // Each location remains an independent point, without clustering.
 
+const MARKER_CONFIG = __MARKER_SETTINGS__;
 const burgeeSvg = `<svg xmlns="http://www.w3.org/2000/svg"
-      width="40" height="40" viewBox="0 0 40 40">
-      <circle cx="20" cy="20" r="18"
-        fill="#245A76"
-        stroke="#FFFCF5"
+    width="40" height="40" viewBox="0 0 40 40">
+
+    <circle cx="20" cy="20" r="18"
+        fill="__MARKER_FILL__"
+        stroke="__MARKER_BORDER__"
         stroke-width="3"/>
-      <path d="M15 11 V29"
+
+    <path d="M15 11 V29"
         fill="none"
-        stroke="#FFFFFF"
+        stroke="__MARKER_FLAG__"
         stroke-width="2.8"
         stroke-linecap="round"/>
-      <path d="M17.5 12 L29 15.5 L17.5 20 Z"
-        fill="#FFFFFF"/>
-    </svg>`;
+
+    <path d="M17.5 12 L29 15.5 L17.5 20 Z"
+        fill="__MARKER_FLAG__"/>
+  </svg>`;
 
 
 
@@ -621,6 +625,13 @@ def render_atlas_map() -> None:
     map_config = config.get("map", {})
     sea_config = map_config.get("sea", {})
 
+    marker_config = map_config.get("markers", {})
+
+    marker_settings = {
+        "fill": marker_config.get("fill", "#A67C43"),
+        "border": marker_config.get("border", "#FFFCF5"),
+        "flag": marker_config.get("flag", "#FFFFFF"),
+    }
     map_height = int(map_config.get("height", 560))
 
     sea_settings = {
@@ -681,6 +692,10 @@ def render_atlas_map() -> None:
     html = html.replace("__SEA_SETTINGS__", json.dumps(sea_settings), )
     html = html.replace("__SEA_COLOR__", sea_settings["color"],)
     html = html.replace("__SAILBOAT__", boat_base64,)
+    html = html.replace("__MARKER_SETTINGS__", json.dumps(marker_settings),)
+    html = html.replace("__MARKER_FILL__", marker_settings["fill"])
+    html = html.replace("__MARKER_BORDER__", marker_settings["border"])
+    html = html.replace("__MARKER_FLAG__", marker_settings["flag"])
 
     # Render the map
     components.html(

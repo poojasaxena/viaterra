@@ -30,7 +30,7 @@ SAILBOAT_VINTAGE =  ILLUSTRATIONS_DIR / "sailboat_vintage.png"
 SAILBOAT_PENNANT = ILLUSTRATIONS_DIR / "sailboat_pennant.png"
 SAILBOAT_MEDITERRANEAN = ILLUSTRATIONS_DIR / "sailboat_mediterranean.png"
 
-COMPASS = COMPASS_DIR / "coastal_explorer.png"
+COMPASS = COMPASS_DIR / "coastal_explorer_v1.png"
 
 LEFT_HEADER_IMAGE = MARITIME_LOGO
 

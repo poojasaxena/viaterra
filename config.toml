@@ -27,3 +27,8 @@ broad_strength = 12.0
 ripple_strength = 0.0
 glint_red = 0.0
 glint_green_blue = 0.0
+
+[map.markers]
+fill = "#C47A24"
+border = "#FFFCF5"
+flag = "#FFFFFF"
