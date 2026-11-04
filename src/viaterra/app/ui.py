@@ -7,10 +7,16 @@ from viaterra.processing.paths import (
     VIATERRA_HEADER,
     LEFT_HEADER_IMAGE,
     AUTHOR_LOGO,
+    load_config,
 )
 
 def render_header() -> None:
     """Render the compact Viaterra homepage header."""
+
+    config = load_config()
+    author_logo_color = config["branding"].get(
+        "author_logo_color", "#315B70"
+    )
 
     import base64
 
@@ -91,17 +97,30 @@ def render_header() -> None:
                 line-height: 1;
             }}
 
+
             .viaterra-author-logo {{
                 position: absolute;
                 top: -10px;
                 right: 0;
                 width: 175px;
                 height: 175px;
-                object-fit: contain;
                 pointer-events: none;
-                filter: grayscale(1) sepia(1) saturate(5)
-                        hue-rotate(165deg) brightness(0.65);
+
+                background-color: {author_logo_color};
+
+                -webkit-mask-image: url("data:image/svg+xml;base64,{author_base64}");
+                mask-image: url("data:image/svg+xml;base64,{author_base64}");
+
+                -webkit-mask-size: contain;
+                mask-size: contain;
+
+                -webkit-mask-position: center;
+                mask-position: center;
+
+                -webkit-mask-repeat: no-repeat;
+                mask-repeat: no-repeat;
             }}
+
 
             @media (max-width: 640px) {{
                 .viaterra-author-logo {{
@@ -174,11 +193,11 @@ def render_header() -> None:
                 src="data:image/png;base64,{left_base64}"
                 alt="Antique maritime illustration"
             >
-            <img
+            <div
                 class="viaterra-author-logo"
-                src="data:image/svg+xml;base64,{author_base64}"
-                alt="Personal signature"
-            >
+                role="img"
+                aria-label="Personal signature"
+            ></div>
             <div class="viaterra-eyebrow">
                ✦ A Personal Travel Atlas ✦
             </div>

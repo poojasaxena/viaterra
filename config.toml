@@ -23,7 +23,7 @@ anchor_dolphin = "data/assets/branding/anchor_dolphin_octopus.png"
 anchor_birds = "data/assets/branding/anchor_birds.png"
 author_logo = "data/assets/branding/author_logo.svg"
 maritime_logo = "data/assets/branding/anchor_maritime.png"
-
+author_logo_color = "#626B4D"
 
 # -------------------------------------------------
 # Header artwork
@@ -58,21 +58,172 @@ torn_parchment_frame = "data/assets/illustrations/nautical/frames/antique_torn_p
 # Travel memorabilia
 # -------------------------------------------------
 
-[illustrations.travel]
+[illustrations.travel.documents]
+air_ticket = "data/assets/illustrations/travel/documents/air_ticket.png"
+bucket_list = "data/assets/illustrations/travel/documents/bucket_list.png"
+travel_bucket_list = "data/assets/illustrations/travel/documents/travel_bucket_list.png"
+italy_travel_guide = "data/assets/illustrations/travel/documents/italy_travel_guide.png"
+italy_travel_guide_flier = "data/assets/illustrations/travel/documents/italy_travel_guide_flier.png"
+travel_passport = "data/assets/illustrations/travel/documents/travel_passport.png"
+
+[illustrations.travel.luggage]
 luggage_tag = "data/assets/illustrations/travel/luggage/luggage_tag.png"
 morocco_luggage_tag = "data/assets/illustrations/travel/luggage/morocco_luggage_tag.png"
 
-air_ticket = "data/assets/illustrations/travel/documents/air_ticket.png"
-travel_bucket_list = "data/assets/illustrations/travel/documents/travel_bucket_list.png"
-italy_guide = "data/assets/illustrations/travel/documents/italy_travel_guide.png"
-travel_passport = "data/assets/illustrations/travel/documents/travel_passport.png"
-
-italy_postcard = "data/assets/illustrations/travel/postcards/italy_postcard.png"
+[illustrations.travel.postcards]
 florence_photographs = "data/assets/illustrations/travel/postcards/florence_photographs.png"
+italy_postcard = "data/assets/illustrations/travel/postcards/italy_postcard.png"
+travel_postcards = "data/assets/illustrations/travel/postcards/travel_postcards.png"
 
-italia_stamp = "data/assets/illustrations/travel/stamps/italia_postage_stamp.png"
+[illustrations.travel.stamps]
 country_stamps = "data/assets/illustrations/travel/stamps/country_stamps.png"
+favourite_country_stamps = "data/assets/illustrations/travel/stamps/favourite_country_stamps.png"
+italia_postage_stamp = "data/assets/illustrations/travel/stamps/italia_postage_stamp.png"
 
+[map.decorations]
+enabled = true
+
+# -------------------------
+# Luggage / tags
+# -------------------------
+
+[map.decorations.morocco_tag]
+category = "luggage"
+asset = "morocco_luggage_tag"
+left = "2%"
+bottom = "8%"
+width = 125
+rotation = -6
+opacity = 0.96
+
+[map.decorations.luggage_tag]
+category = "luggage"
+asset = "luggage_tag"
+right = "1.8%"
+bottom = "17%"
+width = 118
+rotation = 7
+opacity = 0.95
+
+# -------------------------
+# Documents
+# -------------------------
+
+[map.decorations.air_ticket]
+category = "documents"
+asset = "air_ticket"
+left = "38%"
+bottom = "3.5%"
+width = 130
+rotation = -8
+opacity = 0.95
+
+[map.decorations.bucket_list]
+category = "documents"
+asset = "bucket_list"
+right = "3.5%"
+bottom = "4%"
+width = 120
+rotation = -2
+opacity = 0.95
+
+[map.decorations.travel_bucket_list]
+category = "documents"
+asset = "travel_bucket_list"
+right = "10%"
+bottom = "3.8%"
+width = 115
+rotation = 2
+opacity = 0.95
+
+[map.decorations.italy_guide]
+category = "documents"
+asset = "italy_travel_guide"
+left = "52%"
+bottom = "2.8%"
+width = 118
+rotation = -5
+opacity = 0.92
+
+[map.decorations.italy_guide_flier]
+category = "documents"
+asset = "italy_travel_guide_flier"
+left = "59%"
+bottom = "3.2%"
+width = 112
+rotation = 7
+opacity = 0.92
+
+[map.decorations.travel_passport]
+category = "documents"
+asset = "travel_passport"
+left = "2%"
+bottom = "2.5%"
+width = 122
+rotation = -10
+opacity = 0.96
+
+# -------------------------
+# Postcards / photos
+# -------------------------
+
+[map.decorations.italy_postcard]
+category = "postcards"
+asset = "italy_postcard"
+left = "20%"
+bottom = "2.5%"
+width = 165
+rotation = -7
+opacity = 0.96
+
+[map.decorations.florence_photographs]
+category = "postcards"
+asset = "florence_photographs"
+left = "29%"
+bottom = "1.5%"
+width = 140
+rotation = 6
+opacity = 0.92
+
+[map.decorations.travel_postcards]
+category = "postcards"
+asset = "travel_postcards"
+right = "20%"
+bottom = "2.2%"
+width = 155
+rotation = 5
+opacity = 0.92
+
+# -------------------------
+# Stamps
+# -------------------------
+
+[map.decorations.country_stamps]
+category = "stamps"
+asset = "country_stamps"
+right = "18%"
+top = "6.5%"
+width = 138
+rotation = -10
+opacity = 0.36
+
+[map.decorations.favourite_country_stamps]
+category = "stamps"
+asset = "favourite_country_stamps"
+left = "1.8%"
+top = "58%"
+width = 115
+rotation = 8
+opacity = 0.35
+
+[map.decorations.italia_postage_stamp]
+category = "stamps"
+asset = "italia_postage_stamp"
+left = "45%"
+bottom = "3.5%"
+width = 95
+rotation = 10
+opacity = 0.90
 
 [theme]
 background = "#F8F4EB"

@@ -7,7 +7,7 @@ import streamlit.components.v1 as components
 import base64
 from viaterra.processing.paths import load_config, require_asset
 from viaterra.db.queries import get_visited_places
-
+from html import escape
 
 _MAP_HTML = r"""<!doctype html>
 <html lang="en">
@@ -198,6 +198,23 @@ body {
     background: #FFF9F3;
 }
 
+
+/* A generic decorative element for the atlas */
+.viaterra-decoration {
+    position: absolute;
+    height: auto;
+    z-index: 11;
+    pointer-events: none;
+    transform-origin: center;
+    filter: drop-shadow(3px 5px 4px rgba(45, 35, 24, 0.20));
+}
+
+@media (max-width: 640px) {
+    .viaterra-decoration {
+        display: none;
+    }
+}
+
 /* 7. Small screens */
 @media (max-width: 640px) {
     .nautical-boat {
@@ -233,6 +250,9 @@ body {
     alt=""
     aria-hidden="true"
 >
+
+<!-- Travel memorabilia configured in TOML -->
+__DECORATIONS__
 
 
     <!-- This marker key is intentionally positioned at bottom-right via .legend. -->
@@ -273,11 +293,24 @@ const geojson = {
 const map = new maplibregl.Map({
   container: 'map',
   style: 'https://tiles.openfreemap.org/styles/liberty',
-  center: [13, 17], zoom: 1.25, minZoom: 1.1, maxZoom: 17,
+  center: [13, 24], 
+  zoom: 1.25, 
+  minZoom: 1.1, 
+  maxZoom: 17,
   renderWorldCopies: false,
   attributionControl: false
 });
-map.addControl(new maplibregl.NavigationControl({showCompass: false}), 'top-right');
+
+/* Keep the illustrated homepage composition fixed */
+map.scrollZoom.disable();
+map.boxZoom.disable();
+map.dragPan.disable();
+map.dragRotate.disable();
+map.doubleClickZoom.disable();
+map.touchZoomRotate.disable();
+map.keyboard.disable();
+
+/* map.addControl(new maplibregl.NavigationControl({showCompass: false}), 'top-right'); */
 map.addControl(new maplibregl.AttributionControl({compact: true}), 'bottom-right');
 
 const error = document.getElementById('error');
@@ -728,7 +761,48 @@ def render_atlas_map() -> None:
         "illustrations", "weathered_frame"
     )
 
-    # Inject data and configuration into the map template
+    # Decorative travel memorabilia
+    decoration_config = map_config.get("decorations", {})
+    decoration_html = []
+
+    if decoration_config.get("enabled", True):
+        for name, settings in decoration_config.items():
+            if name == "enabled" or not isinstance(settings, dict):
+                continue
+
+            asset = settings["asset"]
+            category = settings["category"]
+
+            image_base64 = encode_image(
+                "illustrations", "travel", category, asset
+            )
+
+            positioning = "; ".join(
+                f"{side}: {settings[side]}"
+                for side in ("top", "right", "bottom", "left")
+                if side in settings
+            )
+
+            width = float(settings.get("width", 120))
+            rotation = float(settings.get("rotation", 0))
+            opacity = float(settings.get("opacity", 1))
+
+            style = (
+                f"{positioning}; "
+                f"width: {width}px; "
+                f"transform: rotate({rotation}deg); "
+                f"opacity: {opacity};"
+            )
+
+            decoration_html.append(
+                '<img class="viaterra-decoration" '
+                f'src="data:image/png;base64,{image_base64}" '
+                f'style="{escape(style, quote=True)}" '
+                'alt="" aria-hidden="true">'
+            )
+
+
+        # Inject data and configuration into the map template
     html = _MAP_HTML
 
     html = html.replace("__COMPASS__", compass_base64)
@@ -741,6 +815,7 @@ def render_atlas_map() -> None:
     html = html.replace("__MARKER_BORDER__", marker_settings["border"])
     html = html.replace("__MARKER_FLAG__", marker_settings["flag"])
     html = html.replace("__WEATHERED_FRAME__", frame_base64)
+    html = html.replace("__DECORATIONS__","\n".join(decoration_html),)
 
     # Render the map
     components.html(
