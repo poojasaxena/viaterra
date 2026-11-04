@@ -5,11 +5,7 @@ import json
 import streamlit as st
 import streamlit.components.v1 as components
 import base64
-from viaterra.processing.paths import (
-    SAILBOAT_VINTAGE,
-    load_config,
-    COMPASS,
-)
+from viaterra.processing.paths import load_config, require_asset
 from viaterra.db.queries import get_visited_places
 
 
@@ -73,15 +69,45 @@ body {
     filter: drop-shadow(0 1px 0 rgba(18, 64, 78, 0.08));
 }
 
-/* Weathered frame overlay */
+
+/* Soft depth beneath the weathered parchment */
+.frame::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 9;
+    pointer-events: none;
+
+    box-shadow:
+        inset 0 0 12px rgba(92, 64, 37, 0.16),
+        inset 0 0 28px rgba(110, 78, 46, 0.10);
+
+    background:
+        radial-gradient(
+            ellipse at top left,
+            rgba(121, 86, 49, 0.12),
+            transparent 23%
+        ),
+        radial-gradient(
+            ellipse at bottom right,
+            rgba(121, 86, 49, 0.12),
+            transparent 23%
+        );
+}
+
+
+
+/* Weathered parchment frame */
 .frame::after {
     content: "";
     position: absolute;
     inset: -8px;
     z-index: 10;
     pointer-events: none;
-    background: url("data:image/png;base64,__WEATHERED_FRAME__")
-                center / 100% 100% no-repeat;
+
+    background:
+        url("data:image/png;base64,__WEATHERED_FRAME__")
+        center / 100% 100% no-repeat;
 }
 
 /* Decorative compass rose */
@@ -260,7 +286,6 @@ map.on('error', e => { if (!map.isStyleLoaded() && e.error) error.style.display 
 // Circular nautical marker: 40px SVG registered at pixelRatio 2 (20px before icon-size).
 // Each location remains an independent point, without clustering.
 
-const MARKER_CONFIG = __MARKER_SETTINGS__;
 const burgeeSvg = `<svg xmlns="http://www.w3.org/2000/svg"
     width="40" height="40" viewBox="0 0 40 40">
 
@@ -682,20 +707,26 @@ def render_atlas_map() -> None:
         .replace("&", "\\u0026")
     )
 
-    # Load the decorative sailboat
-    boat_base64 = base64.b64encode(
-        SAILBOAT_VINTAGE.read_bytes()
-    ).decode("ascii")
 
+    # -------------------------------------------------
+    # Decorative illustrations — configured in TOML
+    # -------------------------------------------------
 
-    ## Load decorative compass
-    compass_base64 = base64.b64encode(
-        COMPASS.read_bytes()
-    ).decode("ascii")
+    def encode_image(*keys: str) -> str:
+        path = require_asset(*keys)
+        return base64.b64encode(path.read_bytes()).decode("ascii")
 
+    boat_base64 = encode_image(
+        "illustrations", "sailboat_vintage"
+    )
 
-    frame_path = COMPASS.parent / "viaterra_weathered_frame.png"
-    frame_base64 = base64.b64encode(frame_path.read_bytes()).decode("ascii")
+    compass_base64 = encode_image(
+        "illustrations", "compass"
+    )
+
+    frame_base64 = encode_image(
+        "illustrations", "weathered_frame"
+    )
 
     # Inject data and configuration into the map template
     html = _MAP_HTML

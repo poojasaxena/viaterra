@@ -1,13 +1,78 @@
 
-[gallery]
-viaterra = "data/assets/header/Viaterra.svg"
-about_viaterra = "data/assets/header/AboutViaterra.svg"
+# -------------------------------------------------
+# Project directories
+# -------------------------------------------------
+
+[directories]
+data = "data"
+assets = "data/assets"
+headers = "data/assets/headers"
+branding = "data/assets/branding"
+gallery = "data/gallary"
+illustrations = "data/assets/illustrations"
+compasses = "data/assets/illustrations/nautical/compasses"
+
+
+# -------------------------------------------------
+# Branding
+# -------------------------------------------------
 
 [branding]
-signature = "data/assets/branding/nostalgic.svg"
+anchor_octopus = "data/assets/branding/anchor_octopus.png"
+anchor_dolphin = "data/assets/branding/anchor_dolphin_octopus.png"
+anchor_birds = "data/assets/branding/anchor_birds.png"
+author_logo = "data/assets/branding/author_logo.svg"
+maritime_logo = "data/assets/branding/anchor_maritime.png"
+
+
+# -------------------------------------------------
+# Header artwork
+# -------------------------------------------------
+
+[headers]
+viaterra = "data/assets/headers/viaterra.svg"
+about_viaterra = "data/assets/headers/about_viaterra.svg"
+finding_my_anchor = "data/assets/headers/finding_my_anchor.svg"
+a_thousand_shore_one_anchor = "data/assets/headers/a_thousand_shore_one_anchor.svg"
+the_geography_of_belonging = "data/assets/headers/the_geography_of_belonging.svg"
+where_horizon_begins = "data/assets/headers/where_horizon_begings.svg"
+not_all_anchors_hold_us_still = "data/assets/headers/not_all_anchor_holds_us_still.svg"
+
+
+# -------------------------------------------------
+# Nautical illustrations
+# -------------------------------------------------
 
 [illustrations]
-home = "data/assets/branding/viaterra_left.png"
+sailboat_vintage = "data/assets/illustrations/nautical/sailboats/sailboat_vintage.png"
+sailboat_pennant = "data/assets/illustrations/nautical/sailboats/sailboat_pennant.png"
+sailboat_mediterranean = "data/assets/illustrations/nautical/sailboats/sailboat_mediterranean.png"
+
+compass = "data/assets/illustrations/nautical/compasses/coastal_explorer_v1.png"
+
+weathered_frame = "data/assets/illustrations/nautical/frames/viaterra_weathered_frame.png"
+torn_parchment_frame = "data/assets/illustrations/nautical/frames/antique_torn_parchment_frame.png"
+
+
+# -------------------------------------------------
+# Travel memorabilia
+# -------------------------------------------------
+
+[illustrations.travel]
+luggage_tag = "data/assets/illustrations/travel/luggage/luggage_tag.png"
+morocco_luggage_tag = "data/assets/illustrations/travel/luggage/morocco_luggage_tag.png"
+
+air_ticket = "data/assets/illustrations/travel/documents/air_ticket.png"
+travel_bucket_list = "data/assets/illustrations/travel/documents/travel_bucket_list.png"
+italy_guide = "data/assets/illustrations/travel/documents/italy_travel_guide.png"
+travel_passport = "data/assets/illustrations/travel/documents/travel_passport.png"
+
+italy_postcard = "data/assets/illustrations/travel/postcards/italy_postcard.png"
+florence_photographs = "data/assets/illustrations/travel/postcards/florence_photographs.png"
+
+italia_stamp = "data/assets/illustrations/travel/stamps/italia_postage_stamp.png"
+country_stamps = "data/assets/illustrations/travel/stamps/country_stamps.png"
+
 
 [theme]
 background = "#F8F4EB"
@@ -32,3 +97,17 @@ glint_green_blue = 0.0
 fill = "#C47A24"
 border = "#FFFCF5"
 flag = "#FFFFFF"
+
+[map.frame]
+enabled = true
+
+edge_dark = "#6F5741"
+edge_mid = "#9A7A57"
+edge_light = "#CDB28A"
+
+outer_opacity = 0.70
+inner_shadow_opacity = 0.18
+feather = 30
+inner_shadow_blur = 22
+
+fold_opacity = 0.10
