@@ -101,13 +101,15 @@ body {
 .frame::after {
     content: "";
     position: absolute;
-    inset: -8px;
+    inset: 0;
     z-index: 10;
     pointer-events: none;
 
     background:
         url("data:image/png;base64,__WEATHERED_FRAME__")
         center / 100% 100% no-repeat;
+
+    opacity: 0.65;
 }
 
 /* Decorative compass rose */
