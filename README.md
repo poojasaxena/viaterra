@@ -1,5 +1,8 @@
 ## map color choices:
-1. #C47A24 2. #985B3B
+1. #C47A24
+2. #985B3B
+3. #713F70
+4. #A33E61
 
 ## author-logo color
 Antique sepia

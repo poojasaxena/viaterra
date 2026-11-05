@@ -245,7 +245,7 @@ left = "43%"
 bottom = "3.5%"
 width = 95
 rotation = 10
-opacity = 0.90
+opacity = 0
 
 
 # -------------------------------------------------
@@ -258,7 +258,7 @@ opacity = 0.90
 category = "postcards"
 asset = "japan_postcard"
 right = "12%"
-top = "12%"
+bottom = "1%"
 width = 130
 rotation = -8
 opacity = 0.94
@@ -266,8 +266,8 @@ opacity = 0.94
 [map.decorations.south_korea_postcard]
 category = "postcards"
 asset = "south_korea_postcard"
-right = "3%"
-top = "21%"
+right = "1%"
+bottom = "25%"
 width = 118
 rotation = 7
 opacity = 0.94
@@ -275,10 +275,10 @@ opacity = 0.94
 [map.decorations.bhutan_postcard]
 category = "postcards"
 asset = "bhutan_postcard"
-right = "27%"
-top = "14%"
+right = "41%"
+bottom = "1%"
 width = 118
-rotation = 5
+rotation = -10
 opacity = 0.92
 
 [map.decorations.thailand_postcard]
@@ -295,8 +295,8 @@ opacity = 0.92
 [map.decorations.senegal_postcard]
 category = "postcards"
 asset = "senegal_postcard"
-left = "36%"
-top = "53%"
+left = "34%"
+bottom = "1%"
 width = 115
 rotation = -7
 opacity = 0.93
@@ -313,8 +313,8 @@ opacity = 0.93
 [map.decorations.madagascar_postcard]
 category = "postcards"
 asset = "madagascar_postcard"
-left = "55%"
-bottom = "17%"
+left = "42%"
+bottom = "1%"
 width = 125
 rotation = 5
 opacity = 0.94
@@ -335,13 +335,13 @@ left = "55%"
 bottom = "6%"
 width = 125
 rotation = -8
-opacity = 0.94
+opacity = 0
 
 [map.decorations.south_africa_table_mountain]
 category = "postcards"
 asset = "south_africa_table_mountain"
-left = "65%"
-bottom = "11%"
+left = "60%"
+bottom = "1%"
 width = 135
 rotation = 7
 opacity = 0.94
@@ -352,7 +352,7 @@ opacity = 0.94
 category = "postcards"
 asset = "uruguay_postcard"
 left = "18%"
-bottom = "18%"
+bottom = "1%"
 width = 125
 rotation = -6
 opacity = 0.93
@@ -401,7 +401,7 @@ opacity = 0.75
 category = "documents"
 asset = "bucketlist_personal"
 right = "2%"
-bottom = "5%"
+bottom = "1%"
 width = 115
 rotation = 6
 opacity = 0.96
@@ -410,8 +410,8 @@ opacity = 0.96
 category = "documents"
 asset = "hamburg_tokyo_ticket"
 left = "44%"
-bottom = "6%"
-width = 140
+bottom = "15%"
+width = 80
 rotation = 8
 opacity = 0.95
 
@@ -424,7 +424,7 @@ left = "61%"
 top = "64%"
 width = 95
 rotation = -10
-opacity = 0.82
+opacity = 0
 
 [map.decorations.travel_postage_stamps]
 category = "stamps"
