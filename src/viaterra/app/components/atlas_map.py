@@ -292,16 +292,20 @@ const geojson = {
   }))
 };
 
+
+const MAP_POSITION = __MAP_POSITION__;
+
 const map = new maplibregl.Map({
-  container: 'map',
-  style: 'https://tiles.openfreemap.org/styles/liberty',
-  center: [13, 24], 
-  zoom: 1.25, 
-  minZoom: 1.1, 
-  maxZoom: 17,
-  renderWorldCopies: false,
-  attributionControl: false
+    container: 'map',
+    style: 'https://tiles.openfreemap.org/styles/liberty',
+    center: MAP_POSITION.center,
+    zoom: MAP_POSITION.zoom,
+    minZoom: 1.1,
+    maxZoom: 17,
+    renderWorldCopies: true,
+    attributionControl: false
 });
+
 
 /* Keep the illustrated homepage composition fixed */
 map.scrollZoom.disable();
@@ -704,6 +708,14 @@ def render_atlas_map() -> None:
     }
     map_height = int(map_config.get("height", 560))
 
+    map_position = {
+        "center": [
+            float(map_config.get("center_longitude", 13.0)),
+            float(map_config.get("center_latitude", 24.0)),
+        ],
+        "zoom": float(map_config.get("zoom", 1.25)),
+    }
+
     sea_settings = {
         "color": sea_config.get("color", "#69C7C8"),
         "deep_color": sea_config.get("deep_color", "#4FAEB4"),
@@ -818,6 +830,7 @@ def render_atlas_map() -> None:
     html = html.replace("__MARKER_FLAG__", marker_settings["flag"])
     html = html.replace("__WEATHERED_FRAME__", frame_base64)
     html = html.replace("__DECORATIONS__","\n".join(decoration_html),)
+    html = html.replace("__MAP_POSITION__",json.dumps(map_position),)
 
     # Render the map
     components.html(

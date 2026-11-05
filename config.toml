@@ -90,20 +90,20 @@ enabled = true
 [map.decorations.morocco_tag]
 category = "luggage"
 asset = "morocco_luggage_tag"
-left = "2%"
+left = "8%"
 bottom = "8%"
-width = 125
-rotation = -6
+width = 80
+rotation = +30
 opacity = 0.96
 
-[map.decorations.luggage_tag]
+[map.decorations.viaterra_tag]
 category = "luggage"
 asset = "luggage_tag"
-right = "1.8%"
-bottom = "17%"
-width = 118
-rotation = 7
-opacity = 0.95
+right = "55%"
+top = "30%"
+width = 100
+rotation = 3
+opacity = 0.8
 
 # -------------------------
 # Documents
@@ -112,19 +112,19 @@ opacity = 0.95
 [map.decorations.air_ticket]
 category = "documents"
 asset = "air_ticket"
-left = "38%"
-bottom = "3.5%"
+left = "35%"
+bottom = "3.0%"
 width = 130
 rotation = -8
 opacity = 0.95
 
-[map.decorations.bucket_list]
+[map.decorations.colorfull_bucket_list]
 category = "documents"
 asset = "bucket_list"
-right = "3.5%"
-bottom = "4%"
+right = "0.1%"
+bottom = "20%"
 width = 120
-rotation = -2
+rotation = +15
 opacity = 0.95
 
 [map.decorations.travel_bucket_list]
@@ -134,31 +134,31 @@ right = "10%"
 bottom = "3.8%"
 width = 115
 rotation = 2
-opacity = 0.95
+opacity = 0
 
 [map.decorations.italy_guide]
 category = "documents"
 asset = "italy_travel_guide"
 left = "52%"
-bottom = "2.8%"
-width = 118
+bottom = "2.0%"
+width = 100
 rotation = -5
 opacity = 0.92
 
 [map.decorations.italy_guide_flier]
 category = "documents"
 asset = "italy_travel_guide_flier"
-left = "59%"
-bottom = "3.2%"
-width = 112
-rotation = 7
+right = "0.5%"
+bottom = "0.5%"
+width = 120
+rotation = -10
 opacity = 0.92
 
 [map.decorations.travel_passport]
 category = "documents"
 asset = "travel_passport"
-left = "2%"
-bottom = "2.5%"
+left = "1%"
+bottom = "1.5%"
 width = 122
 rotation = -10
 opacity = 0.96
@@ -167,20 +167,20 @@ opacity = 0.96
 # Postcards / photos
 # -------------------------
 
-[map.decorations.italy_postcard]
+[map.decorations.italy_salati_postcard]
 category = "postcards"
 asset = "italy_postcard"
-left = "20%"
+left = "14%"
 bottom = "2.5%"
-width = 165
+width = 140
 rotation = -7
 opacity = 0.96
 
 [map.decorations.florence_photographs]
 category = "postcards"
 asset = "florence_photographs"
-left = "29%"
-bottom = "1.5%"
+left = "1%"
+bottom = "26%"
 width = 140
 rotation = 6
 opacity = 0.92
@@ -188,8 +188,8 @@ opacity = 0.92
 [map.decorations.travel_postcards]
 category = "postcards"
 asset = "travel_postcards"
-right = "20%"
-bottom = "2.2%"
+right = "0.5%"
+bottom = "35.2%"
 width = 155
 rotation = 5
 opacity = 0.92
@@ -198,7 +198,7 @@ opacity = 0.92
 # Stamps
 # -------------------------
 
-[map.decorations.country_stamps]
+[map.decorations.JPA_OMN_SRL_stamps]
 category = "stamps"
 asset = "country_stamps"
 right = "18%"
@@ -207,19 +207,19 @@ width = 138
 rotation = -10
 opacity = 0.36
 
-[map.decorations.favourite_country_stamps]
+[map.decorations.countries_stamps]
 category = "stamps"
 asset = "favourite_country_stamps"
-left = "1.8%"
-top = "58%"
+right = "1%"
+top = "32%"
 width = 115
-rotation = 8
-opacity = 0.35
+rotation = -8
+opacity = 1.0
 
 [map.decorations.italia_postage_stamp]
 category = "stamps"
 asset = "italia_postage_stamp"
-left = "45%"
+left = "43%"
 bottom = "3.5%"
 width = 95
 rotation = 10
@@ -233,6 +233,9 @@ accent = "#C7A165"
 
 [map]
 height = 640
+center_longitude = 2.0
+center_latitude = 20.0
+zoom = 1.25
 
 
 [map.sea]
