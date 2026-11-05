@@ -18,7 +18,7 @@ compasses = "data/assets/illustrations/nautical/compasses"
 # -------------------------------------------------
 
 [branding]
-author_logo_color = "#626B4D"
+author_logo_color = "#427B7A"
 viaterra_wordmark_color = "#286B73"
 
 anchor_octopus = "data/assets/branding/anchor_octopus.png"

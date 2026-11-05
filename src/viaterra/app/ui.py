@@ -108,7 +108,7 @@ def render_header() -> None:
                 -webkit-mask-repeat: no-repeat;
                 mask-repeat: no-repeat;
             }}
-            
+
             .viaterra-ornament::before,
             .viaterra-ornament::after {{
                 content: "";
@@ -186,6 +186,7 @@ def render_header() -> None:
                 height: 215px;
                 object-fit: contain;
                 pointer-events: none;
+                filter: saturate(1.15);
             }}
 
             [data-testid="stHeaderActionElements"] {{
