@@ -52,7 +52,9 @@ compass = "data/assets/illustrations/nautical/compasses/coastal_explorer_v1.png"
 
 weathered_frame = "data/assets/illustrations/nautical/frames/viaterra_weathered_frame.png"
 torn_parchment_frame = "data/assets/illustrations/nautical/frames/antique_torn_parchment_frame.png"
-
+watercolor_border = "data/assets/illustrations/nautical/frames/antique_watercolor_border.png"
+soft_watercolor_border = "data/assets/illustrations/nautical/frames/viaterra_soft_watercolor_border.png"
+viaterra_torquise_border = "data/assets/illustrations/nautical/frames/viaterra_torquise_frame.png"
 
 # -------------------------------------------------
 # Travel memorabilia
@@ -62,6 +64,8 @@ torn_parchment_frame = "data/assets/illustrations/nautical/frames/antique_torn_p
 air_ticket = "data/assets/illustrations/travel/documents/air_ticket.png"
 bucket_list = "data/assets/illustrations/travel/documents/bucket_list.png"
 travel_bucket_list = "data/assets/illustrations/travel/documents/travel_bucket_list.png"
+bucketlist_personal = "data/assets/illustrations/travel/documents/bucketlist_personal.png"
+hamburg_tokyo_ticket = "data/assets/illustrations/travel/documents/hamburg_tokyo_ticket.png"
 italy_travel_guide = "data/assets/illustrations/travel/documents/italy_travel_guide.png"
 italy_travel_guide_flier = "data/assets/illustrations/travel/documents/italy_travel_guide_flier.png"
 travel_passport = "data/assets/illustrations/travel/documents/travel_passport.png"
@@ -69,19 +73,34 @@ travel_passport = "data/assets/illustrations/travel/documents/travel_passport.pn
 [illustrations.travel.luggage]
 luggage_tag = "data/assets/illustrations/travel/luggage/luggage_tag.png"
 morocco_luggage_tag = "data/assets/illustrations/travel/luggage/morocco_luggage_tag.png"
+travel_journal = "data/assets/illustrations/travel/luggage/travel_journal.png"
+viaterra_luggage_tag = "data/assets/illustrations/travel/luggage/viaterra_luggage_tag.png"
+vintage_compass = "data/assets/illustrations/travel/luggage/vintage_compass.png"
 
 [illustrations.travel.postcards]
 florence_photographs = "data/assets/illustrations/travel/postcards/florence_photographs.png"
 italy_postcard = "data/assets/illustrations/travel/postcards/italy_postcard.png"
 travel_postcards = "data/assets/illustrations/travel/postcards/travel_postcards.png"
+bhutan_postcard = "data/assets/illustrations/travel/postcards/bhutan_postcard.png"
+cape_verde_postcard = "data/assets/illustrations/travel/postcards/cape_verde_postcard.png"
+japan_postcard = "data/assets/illustrations/travel/postcards/japan_postcard.png"
+madagascar_postcard = "data/assets/illustrations/travel/postcards/madagascar_postcard.png"
+morocco_postcard = "data/assets/illustrations/travel/postcards/morocco_postcard.png"
+senegal_postcard = "data/assets/illustrations/travel/postcards/senegal_postcard.png"
+south_africa_penguins = "data/assets/illustrations/travel/postcards/south_africa_penguins.png"
+south_africa_table_mountain = "data/assets/illustrations/travel/postcards/south_africa_table_mountain.png"
+south_korea_postcard = "data/assets/illustrations/travel/postcards/south_korea_postcard.png"
+thailand_postcard = "data/assets/illustrations/travel/postcards/thailand_postcard.png"
+tropical_photo_stack = "data/assets/illustrations/travel/postcards/tropical_photo_stack.png"
+uruguay_postcard = "data/assets/illustrations/travel/postcards/uruguay_postcard.png"
 
 [illustrations.travel.stamps]
 country_stamps = "data/assets/illustrations/travel/stamps/country_stamps.png"
 favourite_country_stamps = "data/assets/illustrations/travel/stamps/favourite_country_stamps.png"
 italia_postage_stamp = "data/assets/illustrations/travel/stamps/italia_postage_stamp.png"
+south_africa_stamp = "data/assets/illustrations/travel/stamps/south_africa_stamp.png"
+travel_postage_stamps = "data/assets/illustrations/travel/stamps/travel_postage_stamps.png"
 
-[map.decorations]
-enabled = true
 
 # -------------------------
 # Luggage / tags
@@ -225,6 +244,195 @@ width = 95
 rotation = 10
 opacity = 0.90
 
+
+# -------------------------------------------------
+# NEW MEMORABILIA — EXPLORATORY LAYOUT
+# -------------------------------------------------
+
+# Asia
+
+[map.decorations.japan_postcard]
+category = "postcards"
+asset = "japan_postcard"
+right = "12%"
+top = "12%"
+width = 130
+rotation = -8
+opacity = 0.94
+
+[map.decorations.south_korea_postcard]
+category = "postcards"
+asset = "south_korea_postcard"
+right = "3%"
+top = "21%"
+width = 118
+rotation = 7
+opacity = 0.94
+
+[map.decorations.bhutan_postcard]
+category = "postcards"
+asset = "bhutan_postcard"
+right = "27%"
+top = "14%"
+width = 118
+rotation = 5
+opacity = 0.92
+
+[map.decorations.thailand_postcard]
+category = "postcards"
+asset = "thailand_postcard"
+right = "8%"
+top = "45%"
+width = 125
+rotation = -6
+opacity = 0.92
+
+# Africa
+
+[map.decorations.senegal_postcard]
+category = "postcards"
+asset = "senegal_postcard"
+left = "36%"
+top = "53%"
+width = 115
+rotation = -7
+opacity = 0.93
+
+[map.decorations.cape_verde_postcard]
+category = "postcards"
+asset = "cape_verde_postcard"
+left = "28%"
+top = "59%"
+width = 115
+rotation = 8
+opacity = 0.93
+
+[map.decorations.madagascar_postcard]
+category = "postcards"
+asset = "madagascar_postcard"
+left = "55%"
+bottom = "17%"
+width = 125
+rotation = 5
+opacity = 0.94
+
+[map.decorations.morocco_postcard]
+category = "postcards"
+asset = "morocco_postcard"
+left = "36%"
+top = "37%"
+width = 115
+rotation = -5
+opacity = 0.92
+
+[map.decorations.south_africa_penguins]
+category = "postcards"
+asset = "south_africa_penguins"
+left = "55%"
+bottom = "6%"
+width = 125
+rotation = -8
+opacity = 0.94
+
+[map.decorations.south_africa_table_mountain]
+category = "postcards"
+asset = "south_africa_table_mountain"
+left = "65%"
+bottom = "11%"
+width = 135
+rotation = 7
+opacity = 0.94
+
+# South America
+
+[map.decorations.uruguay_postcard]
+category = "postcards"
+asset = "uruguay_postcard"
+left = "18%"
+bottom = "18%"
+width = 125
+rotation = -6
+opacity = 0.93
+
+# Other travel memories
+
+[map.decorations.tropical_photo_stack]
+category = "postcards"
+asset = "tropical_photo_stack"
+left = "3%"
+top = "9%"
+width = 140
+rotation = 9
+opacity = 0.95
+
+[map.decorations.travel_journal]
+category = "luggage"
+asset = "travel_journal"
+left = "2%"
+top = "57%"
+width = 120
+rotation = -8
+opacity = 0.94
+
+[map.decorations.viaterra_luggage_tag]
+category = "luggage"
+asset = "viaterra_luggage_tag"
+right = "2%"
+top = "3%"
+width = 100
+rotation = 9
+opacity = 0.94
+
+[map.decorations.vintage_compass]
+category = "luggage"
+asset = "vintage_compass"
+left = "14%"
+top = "15%"
+width = 85
+rotation = -12
+opacity = 0.75
+
+# Travel documents
+
+[map.decorations.personal_bucket_list]
+category = "documents"
+asset = "bucketlist_personal"
+right = "2%"
+bottom = "5%"
+width = 115
+rotation = 6
+opacity = 0.96
+
+[map.decorations.hamburg_tokyo_ticket]
+category = "documents"
+asset = "hamburg_tokyo_ticket"
+left = "44%"
+bottom = "6%"
+width = 140
+rotation = 8
+opacity = 0.95
+
+# Stamps
+
+[map.decorations.south_africa_stamp]
+category = "stamps"
+asset = "south_africa_stamp"
+left = "61%"
+top = "64%"
+width = 95
+rotation = -10
+opacity = 0.82
+
+[map.decorations.travel_postage_stamps]
+category = "stamps"
+asset = "travel_postage_stamps"
+left = "8%"
+top = "8%"
+width = 115
+rotation = 12
+opacity = 0.72
+
+
 [theme]
 background = "#F8F4EB"
 primary = "#17466C"
@@ -252,16 +460,12 @@ fill = "#C47A24"
 border = "#FFFCF5"
 flag = "#FFFFFF"
 
+
 [map.frame]
 enabled = true
+asset = "viaterra_torquise_border"
 
-edge_dark = "#6F5741"
-edge_mid = "#9A7A57"
-edge_light = "#CDB28A"
-
-outer_opacity = 0.70
-inner_shadow_opacity = 0.18
-feather = 30
-inner_shadow_blur = 22
-
-fold_opacity = 0.10
+width = 18
+opacity = 1.0
+slice_vertical = 14
+slice_horizontal = 10

@@ -41,14 +41,14 @@ body {
     font-family: Georgia, "Times New Roman", serif;
 }
 
-/* 2. Interactive map and its simple, stable frame */
+/* Main map container */
 .frame {
     position: relative;
     width: 100%;
     height: 100%;
     overflow: hidden;
-    border: 1px solid #B99459;
-    border-radius: 4px;
+    border: none;
+    border-radius: 0;
 }
 
 #map {
@@ -97,19 +97,26 @@ body {
 
 
 
-/* Weathered parchment frame */
 .frame::after {
     content: "";
     position: absolute;
-    inset: 0;
+    inset: -3px;
     z-index: 10;
     pointer-events: none;
 
-    background:
-        url("data:image/png;base64,__WEATHERED_FRAME__")
-        center / 100% 100% no-repeat;
+    border: __FRAME_WIDTH__px solid transparent;
 
-    opacity: 0.65;
+    border-image-source:
+        url("data:image/png;base64,__WEATHERED_FRAME__");
+
+    border-image-slice:
+        __FRAME_SLICE_VERTICAL__%
+        __FRAME_SLICE_HORIZONTAL__%;
+
+    border-image-width: 1;
+    border-image-repeat: stretch;
+
+    opacity: __FRAME_OPACITY__;
 }
 
 /* Decorative compass rose */
@@ -771,8 +778,15 @@ def render_atlas_map() -> None:
         "illustrations", "compass"
     )
 
+    frame_config = map_config.get("frame", {})
+    frame_asset = frame_config.get("asset", "weathered_frame")
+    frame_width = int(frame_config.get("width", 18))
+    frame_opacity = float(frame_config.get("opacity", 1.0))
+    frame_slice_vertical = float(frame_config.get("slice_vertical", 14))
+    frame_slice_horizontal = float(frame_config.get("slice_horizontal", 10))
+
     frame_base64 = encode_image(
-        "illustrations", "weathered_frame"
+        "illustrations", frame_asset
     )
 
     # Decorative travel memorabilia
@@ -831,6 +845,10 @@ def render_atlas_map() -> None:
     html = html.replace("__WEATHERED_FRAME__", frame_base64)
     html = html.replace("__DECORATIONS__","\n".join(decoration_html),)
     html = html.replace("__MAP_POSITION__",json.dumps(map_position),)
+    html = html.replace("__FRAME_WIDTH__", str(frame_width))
+    html = html.replace("__FRAME_OPACITY__", str(frame_opacity))
+    html = html.replace("__FRAME_SLICE_VERTICAL__", str(frame_slice_vertical))
+    html = html.replace("__FRAME_SLICE_HORIZONTAL__", str(frame_slice_horizontal))
 
     # Render the map
     components.html(
