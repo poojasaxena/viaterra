@@ -18,12 +18,15 @@ compasses = "data/assets/illustrations/nautical/compasses"
 # -------------------------------------------------
 
 [branding]
+author_logo_color = "#626B4D"
+viaterra_wordmark_color = "#286B73"
+
 anchor_octopus = "data/assets/branding/anchor_octopus.png"
 anchor_dolphin = "data/assets/branding/anchor_dolphin_octopus.png"
 anchor_birds = "data/assets/branding/anchor_birds.png"
 author_logo = "data/assets/branding/author_logo.svg"
 maritime_logo = "data/assets/branding/anchor_maritime.png"
-author_logo_color = "#626B4D"
+
 
 # -------------------------------------------------
 # Header artwork

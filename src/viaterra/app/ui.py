@@ -18,6 +18,10 @@ def render_header() -> None:
         "author_logo_color", "#315B70"
     )
 
+    viaterra_wordmark_color = config["branding"].get(
+        "viaterra_wordmark_color", "#5F7482"
+    )
+
     import base64
 
     svg_base64 = base64.b64encode(
@@ -84,6 +88,27 @@ def render_header() -> None:
                 color: #C7A165;
             }}
 
+            .viaterra-svg {{
+                display: block;
+                width: min(100%, 340px);
+                height: 90px;
+                margin: 0;
+
+                background-color: {viaterra_wordmark_color};
+
+                -webkit-mask-image: url("data:image/svg+xml;base64,{svg_base64}");
+                mask-image: url("data:image/svg+xml;base64,{svg_base64}");
+
+                -webkit-mask-size: contain;
+                mask-size: contain;
+
+                -webkit-mask-position: center;
+                mask-position: center;
+
+                -webkit-mask-repeat: no-repeat;
+                mask-repeat: no-repeat;
+            }}
+            
             .viaterra-ornament::before,
             .viaterra-ornament::after {{
                 content: "";
@@ -201,11 +226,11 @@ def render_header() -> None:
             <div class="viaterra-eyebrow">
                ✦ A Personal Travel Atlas ✦
             </div>
-            <img
+            <div
                 class="viaterra-svg"
-                src="data:image/svg+xml;base64,{svg_base64}"
-                alt="Viaterra"
-            >
+                role="img"
+                aria-label="Viaterra"
+            ></div>
 
             <div class="viaterra-ornament">
                 <span class="viaterra-symbol">⚓</span>
@@ -217,8 +242,6 @@ def render_header() -> None:
         </header>
         """
     )
-
-
 
 def render_welcome() -> None:
     """Render the homepage introduction."""
