@@ -12,6 +12,7 @@ def render_navigation(active_page: str) -> None:
         ("The Atlas", "/The_Atlas"),
         ("My Journeys", "/My_Journeys"),
         ("Places & Memories", "/Places_&_Memories"),
+        ("Capture a Place", "/Capture_a_Place"),
         ("Travel Statistics", "/Travel_Statistics"),
         ("About Viaterra", "/About_Viaterra"),
     ]
