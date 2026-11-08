@@ -9,14 +9,12 @@ def render_navigation(active_page: str) -> None:
 
     items = [
         ("Viaterra", "/"),
-        ("The Atlas", "/The_Atlas"),
-        ("My Journeys", "/My_Journeys"),
-        ("Places & Memories", "/Places_&_Memories"),
-        ("Capture a Place", "/Capture_a_Place"),
+        ("Footprints", "/Footprints"),
+        ("Echoes", "/Echoes"),
+        ("The World in Cities", "/The_World_in_Cities"),
         ("Travel Statistics", "/Travel_Statistics"),
         ("About Viaterra", "/About_Viaterra"),
     ]
-
 
     wave_svg = """
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 14">
