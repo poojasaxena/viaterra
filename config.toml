@@ -125,7 +125,7 @@ right = "55%"
 top = "30%"
 width = 100
 rotation = 3
-opacity = 0.8
+opacity = 0
 
 # -------------------------
 # Documents
@@ -138,7 +138,7 @@ left = "35%"
 bottom = "3.0%"
 width = 130
 rotation = -8
-opacity = 0.95
+opacity = 0
 
 [map.decorations.colorfull_bucket_list]
 category = "documents"
@@ -165,7 +165,7 @@ left = "52%"
 bottom = "2.0%"
 width = 100
 rotation = -5
-opacity = 0.92
+opacity = 0
 
 [map.decorations.italy_guide_flier]
 category = "documents"
@@ -174,7 +174,7 @@ right = "0.5%"
 bottom = "0.5%"
 width = 120
 rotation = -10
-opacity = 0.92
+opacity = 0
 
 [map.decorations.travel_passport]
 category = "documents"
@@ -205,13 +205,13 @@ left = "1%"
 bottom = "26%"
 width = 140
 rotation = 6
-opacity = 0.92
+opacity = 0
 
 [map.decorations.travel_postcards]
 category = "postcards"
 asset = "travel_postcards"
-right = "0.5%"
-bottom = "35.2%"
+left = "0.5%"
+bottom = "25.2%"
 width = 155
 rotation = 5
 opacity = 0.92
@@ -236,7 +236,7 @@ right = "1%"
 top = "32%"
 width = 115
 rotation = -8
-opacity = 1.0
+opacity = 0
 
 [map.decorations.italia_postage_stamp]
 category = "stamps"
@@ -257,8 +257,8 @@ opacity = 0
 [map.decorations.japan_postcard]
 category = "postcards"
 asset = "japan_postcard"
-right = "12%"
-bottom = "1%"
+right = "1%"
+bottom = "37%"
 width = 130
 rotation = -8
 opacity = 0.94
@@ -275,7 +275,7 @@ opacity = 0.94
 [map.decorations.bhutan_postcard]
 category = "postcards"
 asset = "bhutan_postcard"
-right = "41%"
+right = "40%"
 bottom = "1%"
 width = 118
 rotation = -10
@@ -288,7 +288,7 @@ right = "8%"
 top = "45%"
 width = 125
 rotation = -6
-opacity = 0.92
+opacity = 0
 
 # Africa
 
@@ -308,7 +308,7 @@ left = "28%"
 top = "59%"
 width = 115
 rotation = 8
-opacity = 0.93
+opacity = 0
 
 [map.decorations.madagascar_postcard]
 category = "postcards"
@@ -316,7 +316,7 @@ asset = "madagascar_postcard"
 left = "42%"
 bottom = "1%"
 width = 125
-rotation = 5
+rotation = -5
 opacity = 0.94
 
 [map.decorations.morocco_postcard]
@@ -326,7 +326,7 @@ left = "36%"
 top = "37%"
 width = 115
 rotation = -5
-opacity = 0.92
+opacity = 0
 
 [map.decorations.south_africa_penguins]
 category = "postcards"
@@ -344,7 +344,7 @@ left = "60%"
 bottom = "1%"
 width = 135
 rotation = 7
-opacity = 0.94
+opacity = 0
 
 # South America
 
@@ -366,7 +366,7 @@ left = "3%"
 top = "9%"
 width = 140
 rotation = 9
-opacity = 0.95
+opacity = 0
 
 [map.decorations.travel_journal]
 category = "luggage"
@@ -375,7 +375,7 @@ left = "2%"
 top = "57%"
 width = 120
 rotation = -8
-opacity = 0.94
+opacity = 0
 
 [map.decorations.viaterra_luggage_tag]
 category = "luggage"
@@ -384,7 +384,7 @@ right = "2%"
 top = "3%"
 width = 100
 rotation = 9
-opacity = 0.94
+opacity = 0
 
 [map.decorations.vintage_compass]
 category = "luggage"
@@ -393,7 +393,7 @@ left = "14%"
 top = "15%"
 width = 85
 rotation = -12
-opacity = 0.75
+opacity = 0
 
 # Travel documents
 
@@ -403,14 +403,14 @@ asset = "bucketlist_personal"
 right = "2%"
 bottom = "1%"
 width = 115
-rotation = 6
+rotation = -6
 opacity = 0.96
 
 [map.decorations.hamburg_tokyo_ticket]
 category = "documents"
 asset = "hamburg_tokyo_ticket"
-left = "44%"
-bottom = "15%"
+right = "1%"
+bottom = "55%"
 width = 80
 rotation = 8
 opacity = 0.95
@@ -433,7 +433,7 @@ left = "8%"
 top = "8%"
 width = 115
 rotation = 12
-opacity = 0.72
+opacity = 0
 
 
 [theme]
