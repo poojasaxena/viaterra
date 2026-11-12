@@ -207,6 +207,54 @@ body {
     background: #FFF9F3;
 }
 
+.atlas-search {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    width: min(340px, calc(100% - 85px));
+    z-index: 20;
+    font: 14px system-ui, sans-serif;
+}
+
+.atlas-search input {
+    width: 100%;
+    padding: 13px 16px;
+    border: 1px solid #D8CFBE;
+    border-radius: 8px;
+    background: #FFFCF5;
+    color: #254C60;
+    box-shadow: 0 3px 12px rgba(29, 56, 64, 0.15);
+    outline: none;
+}
+
+.atlas-search input:focus {
+    border-color: #438FA6;
+}
+
+.atlas-search-results {
+    display: none;
+    margin-top: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    background: #FFFCF5;
+    border-radius: 7px;
+    box-shadow: 0 4px 16px rgba(29, 56, 64, 0.18);
+}
+
+.atlas-search-results button {
+    display: block;
+    width: 100%;
+    padding: 11px 14px;
+    border: 0;
+    background: transparent;
+    color: #254C60;
+    text-align: left;
+    cursor: pointer;
+}
+
+.atlas-search-results button:hover {
+    background: #F1EADC;
+}
 
 /* A generic decorative element for the atlas */
 .viaterra-decoration {
@@ -247,7 +295,8 @@ __INTERACTIVE_ORNAMENT_CSS__
 <!-- Map layout. The legend and boat float over the interactive map. -->
 <div class="frame">
     <div id="map" role="application" aria-label="Interactive maritime atlas of individually marked visited places"></div>
-  <!-- Fixed cartographic ornament: not a geographic pin or map feature. -->
+    __SEARCH_CONTROL__
+    <!-- Fixed cartographic ornament: not a geographic pin or map feature. -->
 
 <img
     class="nautical-boat"
@@ -311,11 +360,85 @@ const map = new maplibregl.Map({
     center: MAP_POSITION.center,
     zoom: MAP_POSITION.zoom,
     minZoom: 1.1,
-    maxZoom: 17,
+    maxZoom: __MAX_ZOOM__,
     renderWorldCopies: true,
     attributionControl: false
 });
 
+const searchInput = document.getElementById('atlas-search-input');
+const searchResults = document.getElementById('atlas-search-results');
+let searchMarker = null;
+
+// Preview a candidate immediately, while keeping the result list available.
+function showSearchPlace(feature, closeResults = false) {
+    const properties = feature.properties || {};
+    const [longitude, latitude] = feature.geometry.coordinates;
+    const label = [properties.name, properties.city, properties.country]
+        .filter(Boolean).join(', ');
+
+    // Set the coordinates immediately: no long animation from the world view.
+    map.jumpTo({center: [longitude, latitude], zoom: 16});
+
+    if (searchMarker) searchMarker.remove();
+    searchMarker = new maplibregl.Marker({color: '#713F70'})
+        .setLngLat([longitude, latitude])
+        .setPopup(new maplibregl.Popup({offset: 25}).setText(label))
+        .addTo(map);
+    searchMarker.togglePopup();
+
+    if (closeResults) {
+        searchInput.value = label;
+        searchResults.style.display = 'none';
+    }
+}
+
+if (searchInput && searchResults) {
+    searchInput.addEventListener('keydown', async event => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+
+        const query = searchInput.value.trim();
+        if (query.length < 3) return;
+
+        searchResults.replaceChildren();
+        searchResults.style.display = 'block';
+        const message = document.createElement('div');
+        message.style.padding = '12px';
+        message.textContent = 'Searching...';
+        searchResults.appendChild(message);
+
+        try {
+            const url = 'https://photon.komoot.io/api/?limit=5&q='
+                + encodeURIComponent(query);
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Search unavailable');
+            const data = await response.json();
+            const features = data.features || [];
+            searchResults.replaceChildren();
+            if (!features.length) {
+                message.textContent = 'No places found';
+                searchResults.appendChild(message);
+                return;
+            }
+
+            // Enter previews the best match, just as the user expects.
+            showSearchPlace(features[0]);
+            for (const feature of features) {
+                const properties = feature.properties || {};
+                const label = [properties.name, properties.city, properties.country]
+                    .filter(Boolean).join(', ');
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = label;
+                button.addEventListener('click', () => showSearchPlace(feature, true));
+                searchResults.appendChild(button);
+            }
+        } catch (error) {
+            message.textContent = 'Search temporarily unavailable';
+            searchResults.replaceChildren(message);
+        }
+    });
+}
 
 /* Homepage stays fixed; functional pages allow zoom and pan. */
 if (__INTERACTIVE__) {
@@ -501,8 +624,10 @@ function applyMaritimeStyle() {
           }
           map.setPaintProperty(layer.id, 'fill-opacity', 1);
         } else {
-          // Eliminate landcover, park, woodland and other textured shading.
-          map.setPaintProperty(layer.id, 'fill-color', '#F3E9D5');
+          // Keep buildings discernible at street zoom in functional pages.
+          const isBuilding = /building/.test(id) || src.includes('building');
+          map.setPaintProperty(layer.id, 'fill-color',
+              __INTERACTIVE__ && isBuilding ? '#E4D9C3' : '#F3E9D5');
           if (map.hasImage('viaterra-land-wash')) {
             map.setPaintProperty(
                 layer.id,
@@ -519,7 +644,12 @@ function applyMaritimeStyle() {
           map.setPaintProperty(layer.id, 'line-color', '#BCA788');
           map.setPaintProperty(layer.id, 'line-opacity', 0.65);
         } else if (/road|street|highway|rail|bridge|tunnel/.test(id)) {
-          map.setLayoutProperty(layer.id, 'visibility', 'none');
+          if (!__INTERACTIVE__) {
+            map.setLayoutProperty(layer.id, 'visibility', 'none');
+          } else {
+            map.setPaintProperty(layer.id, 'line-color', '#C8BDA9');
+            map.setPaintProperty(layer.id, 'line-opacity', 0.9);
+          }
         } else {
           map.setPaintProperty(layer.id, 'line-color', '#D4C4AA');
           map.setPaintProperty(layer.id, 'line-opacity', 0.4);
@@ -528,7 +658,7 @@ function applyMaritimeStyle() {
         // Keep country and settlement labels, but not POIs, transit, roads or
         // numerous sea labels. The visited-place flags must remain the focus.
         const geographic = /country|state|city|town|village|settlement/.test(id);
-        if (!geographic) {
+        if (!geographic && !__INTERACTIVE__) {
           map.setLayoutProperty(layer.id, 'visibility', 'none');
         } else {
           map.setPaintProperty(layer.id, 'text-color', '#365E67');
@@ -850,8 +980,26 @@ def render_atlas_map(
 
         # Inject data and configuration into the map template
     html = _MAP_HTML
+    search_control = """
+    <div class="atlas-search" id="atlas-search">
+        <input
+            id="atlas-search-input"
+            type="search"
+            placeholder="Search for a place..."
+            aria-label="Search for a place"
+            autocomplete="off"
+        >
+        <div id="atlas-search-results" class="atlas-search-results"></div>
+    </div>
+    """
+
+    html = html.replace(
+        "__SEARCH_CONTROL__",
+        search_control if interactive else "",
+    )
 
     html = html.replace("__INTERACTIVE__", json.dumps(interactive))
+    html = html.replace("__MAX_ZOOM__", "19" if interactive else "17")
     html = html.replace(
         "__INTERACTIVE_ORNAMENT_CSS__",
         ".nautical-boat, .nautical-compass { display: none; }" if interactive else "",
