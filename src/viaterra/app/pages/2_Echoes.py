@@ -9,6 +9,8 @@ import pandas as pd
 import streamlit as st
 from streamlit_geolocation import streamlit_geolocation
 
+from viaterra.app.components.atlas_map import render_atlas_map
+
 from viaterra.app.navigation import render_navigation
 from viaterra.app.ui import render_header
 from viaterra.db.capture import find_nearby, insert_visited_place
@@ -16,10 +18,15 @@ from viaterra.places.search import nearest_place, search_places
 
 st.set_page_config(page_title="Capture a Place | Viaterra", page_icon="⚓", layout="wide",
                    initial_sidebar_state="collapsed")
-render_header()
-render_navigation(active_page="Capture a Place")
-st.subheader("Capture a Place")
-st.caption("Save a place you visited, either by searching its name or using your phone's location.")
+render_header(
+    header_key="echoes",
+    subtitle="Every place holds a memory",
+)
+render_navigation(active_page="Echoes")
+render_atlas_map(
+    interactive=True,
+    decorations=False,
+)
 
 
 def owner_password() -> str | None:

@@ -224,6 +224,9 @@ body {
     }
 }
 
+/* Hide fixed-position nautical ornaments on interactive views. */
+__INTERACTIVE_ORNAMENT_CSS__
+
 /* 7. Small screens */
 @media (max-width: 640px) {
     .nautical-boat {
@@ -314,16 +317,21 @@ const map = new maplibregl.Map({
 });
 
 
-/* Keep the illustrated homepage composition fixed */
-map.scrollZoom.disable();
-map.boxZoom.disable();
-map.dragPan.disable();
-map.dragRotate.disable();
-map.doubleClickZoom.disable();
-map.touchZoomRotate.disable();
-map.keyboard.disable();
-
-/* map.addControl(new maplibregl.NavigationControl({showCompass: false}), 'top-right'); */
+/* Homepage stays fixed; functional pages allow zoom and pan. */
+if (__INTERACTIVE__) {
+    map.addControl(
+        new maplibregl.NavigationControl({showCompass: false}),
+        'top-right'
+    );
+} else {
+    map.scrollZoom.disable();
+    map.boxZoom.disable();
+    map.dragPan.disable();
+    map.dragRotate.disable();
+    map.doubleClickZoom.disable();
+    map.touchZoomRotate.disable();
+    map.keyboard.disable();
+}
 map.addControl(new maplibregl.AttributionControl({compact: true}), 'bottom-right');
 
 const error = document.getElementById('error');
@@ -698,8 +706,18 @@ map.on('load', () => {
 </html>
 """
 
-def render_atlas_map() -> None:
-    """Render the nautical atlas using centralized configuration."""
+def render_atlas_map(
+    *,
+    interactive: bool = False,
+    decorations: bool | None = None,
+) -> None:
+    """Render the nautical atlas, fixed on the homepage or navigable elsewhere.
+
+    The existing no-argument homepage call remains unchanged. Interactive maps
+    omit the homepage souvenirs by default.
+    """
+    if decorations is None:
+        decorations = not interactive
 
     # Application configuration
     config = load_config()
@@ -793,7 +811,7 @@ def render_atlas_map() -> None:
     decoration_config = map_config.get("decorations", {})
     decoration_html = []
 
-    if decoration_config.get("enabled", True):
+    if decorations and decoration_config.get("enabled", True):
         for name, settings in decoration_config.items():
             if name == "enabled" or not isinstance(settings, dict):
                 continue
@@ -833,6 +851,11 @@ def render_atlas_map() -> None:
         # Inject data and configuration into the map template
     html = _MAP_HTML
 
+    html = html.replace("__INTERACTIVE__", json.dumps(interactive))
+    html = html.replace(
+        "__INTERACTIVE_ORNAMENT_CSS__",
+        ".nautical-boat, .nautical-compass { display: none; }" if interactive else "",
+    )
     html = html.replace("__COMPASS__", compass_base64)
     html = html.replace("__PLACES__", safe_json)
     html = html.replace("__SEA_SETTINGS__", json.dumps(sea_settings), )
