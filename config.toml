@@ -1,8 +1,96 @@
+# =============================================================
+# VIATERRA — CONFIGURATION
+# Frequently adjusted visual controls are at the top.
+# Stable asset paths and homepage decorations are further below.
+# =============================================================
 
-# -------------------------------------------------
-# Project directories
-# -------------------------------------------------
 
+# -------------------------------------------------------------
+# ACTIVE — Header logo layout
+# -------------------------------------------------------------
+[header.left_logo]
+desktop_size = 165
+desktop_top = 0
+desktop_left = 0
+
+tablet_size = 110
+tablet_top = 5
+
+mobile_visible = false
+
+
+# -------------------------------------------------------------
+# ACTIVE — Branding colours and logo assets
+# -------------------------------------------------------------
+[branding]
+author_logo_color = "#427B7A"
+viaterra_wordmark_color = "#286B73"
+anchor_octopus = "data/assets/branding/anchor_octopus.png"
+anchor_dolphin = "data/assets/branding/anchor_dolphin_octopus.png"
+anchor_birds = "data/assets/branding/anchor_birds.png"
+author_logo = "data/assets/branding/author_logo.svg"
+maritime_logo = "data/assets/branding/anchor_maritime.png"
+anchor_v1 = "data/assets/branding/anchor_maritime_engraving.png"
+
+
+# -------------------------------------------------------------
+# ACTIVE — Theme colours
+# -------------------------------------------------------------
+[theme]
+background = "#F8F4EB"
+primary = "#17466C"
+secondary = "#557786"
+accent = "#C7A165"
+
+
+# -------------------------------------------------------------
+# ACTIVE — Main map
+# -------------------------------------------------------------
+[map]
+height = 640
+center_longitude = 2.0
+center_latitude = 20.0
+zoom = 1.25
+
+
+# -------------------------------------------------------------
+# ACTIVE — Sea colours and texture
+# -------------------------------------------------------------
+[map.sea]
+color = "#438FA6"
+deep_color = "#367A91"
+light_color = "#65AABB"
+broad_strength = 12.0
+ripple_strength = 0.0
+glint_red = 0.0
+glint_green_blue = 0.0
+
+
+# -------------------------------------------------------------
+# ACTIVE — Markers
+# -------------------------------------------------------------
+[map.markers]
+fill = "#C47A24"
+border = "#FFFCF5"
+flag = "#FFFFFF"
+
+
+# -------------------------------------------------------------
+# ACTIVE — Map frame
+# -------------------------------------------------------------
+[map.frame]
+enabled = true
+asset = "viaterra_torquise_border"
+
+width = 18
+opacity = 1.0
+slice_vertical = 14
+slice_horizontal = 10
+
+
+# -------------------------------------------------------------
+# ASSET PATHS — Project directories
+# -------------------------------------------------------------
 [directories]
 data = "data"
 assets = "data/assets"
@@ -17,21 +105,10 @@ compasses = "data/assets/illustrations/nautical/compasses"
 # Branding
 # -------------------------------------------------
 
-[branding]
-author_logo_color = "#427B7A"
-viaterra_wordmark_color = "#286B73"
 
-anchor_octopus = "data/assets/branding/anchor_octopus.png"
-anchor_dolphin = "data/assets/branding/anchor_dolphin_octopus.png"
-anchor_birds = "data/assets/branding/anchor_birds.png"
-author_logo = "data/assets/branding/author_logo.svg"
-maritime_logo = "data/assets/branding/anchor_maritime.png"
-
-
-# -------------------------------------------------
-# Header artwork
-# -------------------------------------------------
-
+# -------------------------------------------------------------
+# ASSET PATHS — Header wordmarks
+# -------------------------------------------------------------
 [headers]
 viaterra = "data/assets/headers/viaterra.svg"
 about_viaterra = "data/assets/headers/about_viaterra.svg"
@@ -46,6 +123,10 @@ not_all_anchors_hold_us_still = "data/assets/headers/not_all_anchor_holds_us_sti
 # Nautical illustrations
 # -------------------------------------------------
 
+
+# -------------------------------------------------------------
+# ASSET PATHS — Nautical illustrations
+# -------------------------------------------------------------
 [illustrations]
 sailboat_vintage = "data/assets/illustrations/nautical/sailboats/sailboat_vintage.png"
 sailboat_pennant = "data/assets/illustrations/nautical/sailboats/sailboat_pennant.png"
@@ -63,6 +144,10 @@ viaterra_torquise_border = "data/assets/illustrations/nautical/frames/viaterra_t
 # Travel memorabilia
 # -------------------------------------------------
 
+
+# -------------------------------------------------------------
+# ASSET PATHS — Documents
+# -------------------------------------------------------------
 [illustrations.travel.documents]
 air_ticket = "data/assets/illustrations/travel/documents/air_ticket.png"
 bucket_list = "data/assets/illustrations/travel/documents/bucket_list.png"
@@ -73,6 +158,10 @@ italy_travel_guide = "data/assets/illustrations/travel/documents/italy_travel_gu
 italy_travel_guide_flier = "data/assets/illustrations/travel/documents/italy_travel_guide_flier.png"
 travel_passport = "data/assets/illustrations/travel/documents/travel_passport.png"
 
+
+# -------------------------------------------------------------
+# ASSET PATHS — Luggage
+# -------------------------------------------------------------
 [illustrations.travel.luggage]
 luggage_tag = "data/assets/illustrations/travel/luggage/luggage_tag.png"
 morocco_luggage_tag = "data/assets/illustrations/travel/luggage/morocco_luggage_tag.png"
@@ -80,6 +169,10 @@ travel_journal = "data/assets/illustrations/travel/luggage/travel_journal.png"
 viaterra_luggage_tag = "data/assets/illustrations/travel/luggage/viaterra_luggage_tag.png"
 vintage_compass = "data/assets/illustrations/travel/luggage/vintage_compass.png"
 
+
+# -------------------------------------------------------------
+# ASSET PATHS — Postcards
+# -------------------------------------------------------------
 [illustrations.travel.postcards]
 florence_photographs = "data/assets/illustrations/travel/postcards/florence_photographs.png"
 italy_postcard = "data/assets/illustrations/travel/postcards/italy_postcard.png"
@@ -97,6 +190,10 @@ thailand_postcard = "data/assets/illustrations/travel/postcards/thailand_postcar
 tropical_photo_stack = "data/assets/illustrations/travel/postcards/tropical_photo_stack.png"
 uruguay_postcard = "data/assets/illustrations/travel/postcards/uruguay_postcard.png"
 
+
+# -------------------------------------------------------------
+# ASSET PATHS — Stamps
+# -------------------------------------------------------------
 [illustrations.travel.stamps]
 country_stamps = "data/assets/illustrations/travel/stamps/country_stamps.png"
 favourite_country_stamps = "data/assets/illustrations/travel/stamps/favourite_country_stamps.png"
@@ -109,6 +206,13 @@ travel_postage_stamps = "data/assets/illustrations/travel/stamps/travel_postage_
 # Luggage / tags
 # -------------------------
 
+
+# =============================================================
+# HOMEPAGE MAP DECORATIONS — SETTLED / EXPERIMENTAL LAYOUT
+# Hidden items have opacity = 0; retained for future use.
+# =============================================================
+
+
 [map.decorations.morocco_tag]
 category = "luggage"
 asset = "morocco_luggage_tag"
@@ -117,6 +221,7 @@ bottom = "8%"
 width = 80
 rotation = +30
 opacity = 0.96
+
 
 [map.decorations.viaterra_tag]
 category = "luggage"
@@ -131,6 +236,7 @@ opacity = 0
 # Documents
 # -------------------------
 
+
 [map.decorations.air_ticket]
 category = "documents"
 asset = "air_ticket"
@@ -139,6 +245,7 @@ bottom = "3.0%"
 width = 130
 rotation = -8
 opacity = 0
+
 
 [map.decorations.colorfull_bucket_list]
 category = "documents"
@@ -149,6 +256,7 @@ width = 120
 rotation = +15
 opacity = 0.95
 
+
 [map.decorations.travel_bucket_list]
 category = "documents"
 asset = "travel_bucket_list"
@@ -157,6 +265,7 @@ bottom = "3.8%"
 width = 115
 rotation = 2
 opacity = 0
+
 
 [map.decorations.italy_guide]
 category = "documents"
@@ -167,6 +276,7 @@ width = 100
 rotation = -5
 opacity = 0
 
+
 [map.decorations.italy_guide_flier]
 category = "documents"
 asset = "italy_travel_guide_flier"
@@ -175,6 +285,7 @@ bottom = "0.5%"
 width = 120
 rotation = -10
 opacity = 0
+
 
 [map.decorations.travel_passport]
 category = "documents"
@@ -189,6 +300,7 @@ opacity = 0.96
 # Postcards / photos
 # -------------------------
 
+
 [map.decorations.italy_salati_postcard]
 category = "postcards"
 asset = "italy_postcard"
@@ -198,6 +310,7 @@ width = 140
 rotation = -7
 opacity = 0.96
 
+
 [map.decorations.florence_photographs]
 category = "postcards"
 asset = "florence_photographs"
@@ -206,6 +319,7 @@ bottom = "26%"
 width = 140
 rotation = 6
 opacity = 0
+
 
 [map.decorations.travel_postcards]
 category = "postcards"
@@ -220,6 +334,7 @@ opacity = 0.92
 # Stamps
 # -------------------------
 
+
 [map.decorations.JPA_OMN_SRL_stamps]
 category = "stamps"
 asset = "country_stamps"
@@ -229,6 +344,7 @@ width = 138
 rotation = -10
 opacity = 0.36
 
+
 [map.decorations.countries_stamps]
 category = "stamps"
 asset = "favourite_country_stamps"
@@ -237,6 +353,7 @@ top = "32%"
 width = 115
 rotation = -8
 opacity = 0
+
 
 [map.decorations.italia_postage_stamp]
 category = "stamps"
@@ -254,6 +371,7 @@ opacity = 0
 
 # Asia
 
+
 [map.decorations.japan_postcard]
 category = "postcards"
 asset = "japan_postcard"
@@ -262,6 +380,7 @@ bottom = "37%"
 width = 130
 rotation = -8
 opacity = 0.94
+
 
 [map.decorations.south_korea_postcard]
 category = "postcards"
@@ -272,6 +391,7 @@ width = 118
 rotation = 7
 opacity = 0.94
 
+
 [map.decorations.bhutan_postcard]
 category = "postcards"
 asset = "bhutan_postcard"
@@ -280,6 +400,7 @@ bottom = "1%"
 width = 118
 rotation = -10
 opacity = 0.92
+
 
 [map.decorations.thailand_postcard]
 category = "postcards"
@@ -292,6 +413,7 @@ opacity = 0
 
 # Africa
 
+
 [map.decorations.senegal_postcard]
 category = "postcards"
 asset = "senegal_postcard"
@@ -300,6 +422,7 @@ bottom = "1%"
 width = 115
 rotation = -7
 opacity = 0.93
+
 
 [map.decorations.cape_verde_postcard]
 category = "postcards"
@@ -310,6 +433,7 @@ width = 115
 rotation = 8
 opacity = 0
 
+
 [map.decorations.madagascar_postcard]
 category = "postcards"
 asset = "madagascar_postcard"
@@ -318,6 +442,7 @@ bottom = "1%"
 width = 125
 rotation = -5
 opacity = 0.94
+
 
 [map.decorations.morocco_postcard]
 category = "postcards"
@@ -328,6 +453,7 @@ width = 115
 rotation = -5
 opacity = 0
 
+
 [map.decorations.south_africa_penguins]
 category = "postcards"
 asset = "south_africa_penguins"
@@ -336,6 +462,7 @@ bottom = "6%"
 width = 125
 rotation = -8
 opacity = 0
+
 
 [map.decorations.south_africa_table_mountain]
 category = "postcards"
@@ -348,6 +475,7 @@ opacity = 0
 
 # South America
 
+
 [map.decorations.uruguay_postcard]
 category = "postcards"
 asset = "uruguay_postcard"
@@ -359,6 +487,7 @@ opacity = 0.93
 
 # Other travel memories
 
+
 [map.decorations.tropical_photo_stack]
 category = "postcards"
 asset = "tropical_photo_stack"
@@ -367,6 +496,7 @@ top = "9%"
 width = 140
 rotation = 9
 opacity = 0
+
 
 [map.decorations.travel_journal]
 category = "luggage"
@@ -377,6 +507,7 @@ width = 120
 rotation = -8
 opacity = 0
 
+
 [map.decorations.viaterra_luggage_tag]
 category = "luggage"
 asset = "viaterra_luggage_tag"
@@ -385,6 +516,7 @@ top = "3%"
 width = 100
 rotation = 9
 opacity = 0
+
 
 [map.decorations.vintage_compass]
 category = "luggage"
@@ -397,6 +529,7 @@ opacity = 0
 
 # Travel documents
 
+
 [map.decorations.personal_bucket_list]
 category = "documents"
 asset = "bucketlist_personal"
@@ -405,6 +538,7 @@ bottom = "1%"
 width = 115
 rotation = -6
 opacity = 0.96
+
 
 [map.decorations.hamburg_tokyo_ticket]
 category = "documents"
@@ -417,6 +551,7 @@ opacity = 0.95
 
 # Stamps
 
+
 [map.decorations.south_africa_stamp]
 category = "stamps"
 asset = "south_africa_stamp"
@@ -426,6 +561,7 @@ width = 95
 rotation = -10
 opacity = 0
 
+
 [map.decorations.travel_postage_stamps]
 category = "stamps"
 asset = "travel_postage_stamps"
@@ -434,41 +570,3 @@ top = "8%"
 width = 115
 rotation = 12
 opacity = 0
-
-
-[theme]
-background = "#F8F4EB"
-primary = "#17466C"
-secondary = "#557786"
-accent = "#C7A165"
-
-[map]
-height = 640
-center_longitude = 2.0
-center_latitude = 20.0
-zoom = 1.25
-
-
-[map.sea]
-color = "#438FA6"
-deep_color = "#367A91"
-light_color = "#65AABB"
-broad_strength = 12.0
-ripple_strength = 0.0
-glint_red = 0.0
-glint_green_blue = 0.0
-
-[map.markers]
-fill = "#C47A24"
-border = "#FFFCF5"
-flag = "#FFFFFF"
-
-
-[map.frame]
-enabled = true
-asset = "viaterra_torquise_border"
-
-width = 18
-opacity = 1.0
-slice_vertical = 14
-slice_horizontal = 10

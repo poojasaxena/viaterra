@@ -9,32 +9,42 @@ from viaterra.processing.paths import (
     AUTHOR_LOGO,
     load_config,
 )
+import base64
+import mimetypes
+from pathlib import Path
+
+
+def image_data_uri(path: Path) -> str:
+    """Return a base64 data URI for PNG, SVG, JPEG, or WebP images."""
+
+    mime_type, _ = mimetypes.guess_type(str(path))
+
+    if mime_type is None:
+        raise ValueError(f"Unsupported image format: {path}")
+
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+
+    return f"data:{mime_type};base64,{encoded}"
 
 def render_header() -> None:
     """Render the compact Viaterra homepage header."""
 
     config = load_config()
-    author_logo_color = config["branding"].get(
-        "author_logo_color", "#315B70"
-    )
+    logo_config = config["header"]["left_logo"]
 
-    viaterra_wordmark_color = config["branding"].get(
-        "viaterra_wordmark_color", "#5F7482"
-    )
+    logo_size = logo_config.get("desktop_size", 215)
+    logo_top = logo_config.get("desktop_top", -26)
+    logo_left = logo_config.get("desktop_left", 0)
 
-    import base64
+    tablet_size = logo_config.get("tablet_size", 110)
+    tablet_top = logo_config.get("tablet_top", 5)
+    mobile_visible = logo_config.get("mobile_visible", False)
+    author_logo_color = config["branding"].get("author_logo_color", "#315B70")
+    viaterra_wordmark_color = config["branding"].get("viaterra_wordmark_color", "#5F7482")
 
-    svg_base64 = base64.b64encode(
-        VIATERRA_HEADER.read_bytes()
-    ).decode("ascii")
-
-    left_base64 = base64.b64encode(
-        LEFT_HEADER_IMAGE.read_bytes()
-    ).decode("ascii")
-
-    author_base64 = base64.b64encode(
-        AUTHOR_LOGO.read_bytes()
-    ).decode("ascii")
+    wordmark_uri = image_data_uri(VIATERRA_HEADER)
+    left_uri = image_data_uri(LEFT_HEADER_IMAGE)
+    author_uri = image_data_uri(AUTHOR_LOGO)
 
     st.html(
         f"""
@@ -96,8 +106,8 @@ def render_header() -> None:
 
                 background-color: {viaterra_wordmark_color};
 
-                -webkit-mask-image: url("data:image/svg+xml;base64,{svg_base64}");
-                mask-image: url("data:image/svg+xml;base64,{svg_base64}");
+                -webkit-mask-image: url("{wordmark_uri}");
+                mask-image: url("{wordmark_uri}");
 
                 -webkit-mask-size: contain;
                 mask-size: contain;
@@ -133,8 +143,8 @@ def render_header() -> None:
 
                 background-color: {author_logo_color};
 
-                -webkit-mask-image: url("data:image/svg+xml;base64,{author_base64}");
-                mask-image: url("data:image/svg+xml;base64,{author_base64}");
+                -webkit-mask-image: url("{author_uri}");
+                mask-image: url("{author_uri}");
 
                 -webkit-mask-size: contain;
                 mask-size: contain;
@@ -180,10 +190,10 @@ def render_header() -> None:
 
             .viaterra-left-illustration {{
                 position: absolute;
-                top: -26px;
-                left: 0;
-                width: 215px;
-                height: 215px;
+                top: {logo_top}px;
+                left: {logo_left}px;
+                width: {logo_size}px;
+                height: {logo_size}px;
                 object-fit: contain;
                 pointer-events: none;
                 filter: saturate(1.15);
@@ -199,26 +209,26 @@ def render_header() -> None:
 
             @media (max-width: 900px) {{
                 .viaterra-left-illustration {{
-                    width: 110px;
-                    height: 110px;
-                    top: 5px;
+                    width: {tablet_size}px;
+                    height: {tablet_size}px;
+                    top: {tablet_top}px;
                 }}
             }}
 
             @media (max-width: 640px) {{
                 .viaterra-left-illustration {{
-                    display: none;
+                    display: {"block" if mobile_visible else "none"};
                 }}
             }}
 
         </style>
 
         <header class="viaterra-header">
-            <img
-                class="viaterra-left-illustration"
-                src="data:image/png;base64,{left_base64}"
-                alt="Antique maritime illustration"
-            >
+        <img
+            class="viaterra-left-illustration"
+            src="{left_uri}"
+            alt="Viaterra anchor illustration"
+        >
             <div
                 class="viaterra-author-logo"
                 role="img"

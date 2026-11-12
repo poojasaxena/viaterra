@@ -119,7 +119,8 @@ ANCHOR_OCTOPUS = require_asset("branding", "anchor_octopus")
 ANCHOR_DOLPHIN = require_asset("branding", "anchor_dolphin")
 ANCHOR_BIRDS = require_asset("branding", "anchor_birds")
 AUTHOR_LOGO = require_asset("branding", "author_logo")
-MARITIME_LOGO = require_asset("branding", "maritime_logo")
+MARITIME_LOGO = require_asset("branding", "maritime_logo") # default
+TEST_LOGO = require_asset("branding", "anchor_v1")
 
 SAILBOAT_VINTAGE = require_asset("illustrations", "sailboat_vintage")
 SAILBOAT_PENNANT = require_asset("illustrations", "sailboat_pennant")
@@ -127,5 +128,5 @@ SAILBOAT_MEDITERRANEAN = require_asset("illustrations", "sailboat_mediterranean"
 
 COMPASS = require_asset("illustrations", "compass")
 
-LEFT_HEADER_IMAGE = MARITIME_LOGO
+LEFT_HEADER_IMAGE = TEST_LOGO
 VIATERRA_HEADER = header_path("viaterra")
