@@ -4,7 +4,7 @@ import streamlit as st
 
 from viaterra.app.ui import render_header
 from viaterra.app.navigation import render_navigation
-from viaterra.app.components.atlas_map import render_atlas_map
+from viaterra.app.components.atlas_map_bk import render_atlas_map
 
 
 st.set_page_config(
