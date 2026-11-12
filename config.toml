@@ -33,6 +33,52 @@ maritime_logo = "data/assets/branding/anchor_maritime.png"
 anchor_v1 = "data/assets/branding/anchor_maritime_engraving.png"
 
 
+# -------------------------------------------------
+# Page header appearance
+# -------------------------------------------------
+
+[header.wordmarks.viaterra]
+width = 340
+height = 90
+scale = 1.0
+offset_y = 0
+margin_bottom = 0
+
+[header.wordmarks.echoes]
+width = 340
+height = 90
+scale = 1.40
+offset_y = 5
+margin_bottom = -12
+
+[header.wordmarks.footprints]
+width = 340
+height = 90
+scale = 1.0
+offset_y = 0
+margin_bottom = 0
+
+[header.wordmarks.the_world_in_cities]
+width = 340
+height = 90
+scale = 1.0
+offset_y = 0
+margin_bottom = 0
+
+[header.wordmarks.travel_statistics]
+width = 340
+height = 90
+scale = 1.0
+offset_y = 0
+margin_bottom = 0
+
+[header.wordmarks.about_viaterra]
+width = 340
+height = 90
+scale = 1.0
+offset_y = 0
+margin_bottom = 0
+
 # -------------------------------------------------------------
 # ACTIVE — Theme colours
 # -------------------------------------------------------------

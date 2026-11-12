@@ -47,6 +47,18 @@ def render_header(
     config = load_config()
     logo_config = config["header"]["left_logo"]
 
+    wordmark_config = (
+        config.get("header", {})
+        .get("wordmarks", {})
+        .get(header_key, {})
+    )
+
+    wordmark_width = int(wordmark_config.get("width", 340))
+    wordmark_height = int(wordmark_config.get("height", 90))
+    wordmark_scale = float(wordmark_config.get("scale", 1.0))
+    wordmark_offset_y = int(wordmark_config.get("offset_y", 0))
+    wordmark_margin_bottom = int(wordmark_config.get("margin_bottom", 0))
+
     logo_size = logo_config.get("desktop_size", 215)
     logo_top = logo_config.get("desktop_top", -26)
     logo_left = logo_config.get("desktop_left", 0)
@@ -61,6 +73,11 @@ def render_header(
     left_uri = image_data_uri(LEFT_HEADER_IMAGE)
     author_uri = image_data_uri(AUTHOR_LOGO)
 
+    header_class = (
+        "viaterra-header viaterra-header--echoes"
+        if header_key == "echoes"
+        else "viaterra-header"
+    )
     st.html(
         f"""
         <style>
@@ -115,9 +132,9 @@ def render_header(
 
             .viaterra-svg {{
                 display: block;
-                width: min(100%, 340px);
-                height: 90px;
-                margin: 0;
+                width: min(100%, {wordmark_width}px);
+                height: {wordmark_height}px;
+                margin: 0 0 {wordmark_margin_bottom}px;
 
                 background-color: {viaterra_wordmark_color};
 
@@ -132,6 +149,10 @@ def render_header(
 
                 -webkit-mask-repeat: no-repeat;
                 mask-repeat: no-repeat;
+                transform: translateY({wordmark_offset_y}px)
+                        scale({wordmark_scale});
+                transform-origin: center center;
+
             }}
 
             .viaterra-ornament::before,
@@ -238,7 +259,7 @@ def render_header(
 
         </style>
 
-        <header class="viaterra-header">
+        <header class="{header_class}">
         <img
             class="viaterra-left-illustration"
             src="{left_uri}"
@@ -324,13 +345,6 @@ def render_header_deprecated() -> None:
                 text-transform: uppercase;
                 line-height: 1.2;
                 margin: 0 0 0.1rem;
-            }}
-
-            .viaterra-svg {{
-                display: block;
-                width: min(100%, 340px);
-                height: auto;
-                margin: 0;
             }}
 
             .viaterra-ornament {{
