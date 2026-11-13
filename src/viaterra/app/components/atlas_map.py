@@ -217,7 +217,35 @@ body {
     font: 14px system-ui, sans-serif;
 }
 
-.atlas-search input {
+.atlas-search-bar {
+    display: flex;
+    gap: 5px;
+}
+
+.atlas-locate {
+    flex: 0 0 44px;
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    border: 1px solid #D8CFBE;
+    border-radius: 8px;
+    background: #FFFCF5;
+    color: #254C60;
+    cursor: pointer;
+    box-shadow: 0 3px 12px rgba(29, 56, 64, 0.15);
+}
+
+.atlas-locate:hover:not(:disabled) {
+    background: #E2EEEB;
+}
+
+.atlas-locate:disabled {
+    opacity: 0.65;
+    cursor: wait;
+}
+
+.atlas-search .atlas-search-bar input {
+    min-width: 0;
     width: 100%;
     padding: 13px 16px;
     border: 1px solid #D8CFBE;
@@ -226,6 +254,26 @@ body {
     color: #254C60;
     box-shadow: 0 3px 12px rgba(29, 56, 64, 0.15);
     outline: none;
+}
+
+.atlas-save-popup input {
+    width: 100%;
+    min-height: 36px;
+    margin: 6px 0 2px;
+    border: 1px solid #D8CFBE;
+    border-radius: 6px;
+    padding: 5px 8px;
+    background: #FFFCF5;
+    color: #254C60;
+    font: inherit;
+}
+
+.atlas-location-status:not(:empty) {
+    margin-top: 4px;
+    padding: 8px 12px;
+    border-radius: 7px;
+    background: #FFFCF5;
+    color: #254C60;
 }
 
 .atlas-search input:focus {
@@ -402,6 +450,8 @@ const map = new maplibregl.Map({
 
 const searchInput = document.getElementById('atlas-search-input');
 const searchResults = document.getElementById('atlas-search-results');
+const locateButton = document.getElementById('atlas-locate');
+const locationStatus = document.getElementById('atlas-location-status');
 let searchMarker = null;
 let saveToken = null;
 let savePopup = null;
@@ -415,9 +465,13 @@ function searchPlaceLabel(properties) {
 
 function updateSavePopup() {
     if (!savePopup) return;
-    const {button, status, result} = savePopup;
+    const {button, status, result, nameInput} = savePopup;
+    if (nameInput) {
+        nameInput.hidden = !saveToken;
+        nameInput.disabled = saveRequest?.popup === savePopup || result?.status === 'saved';
+    }
     button.hidden = !saveToken || result?.status === 'saved';
-    button.disabled = saveRequest !== null;
+    button.disabled = saveRequest !== null || (nameInput !== null && !nameInput.value.trim());
     button.textContent = saveRequest?.popup === savePopup ? 'Saving…'
         : result?.status === 'nearby' ? 'Save separate flag' : 'Save as visited';
     status.textContent = saveToken ? (result?.message || '') : '';
@@ -436,7 +490,7 @@ function requestSave(popup) {
     }, '*');
 }
 
-function showSearchPlace(feature, closeResults = false) {
+function showSearchPlace(feature, closeResults = false, accuracy = null) {
     const properties = feature.properties || {};
     const [longitude, latitude] = feature.geometry.coordinates;
     const label = searchPlaceLabel(properties);
@@ -458,8 +512,10 @@ function showSearchPlace(feature, closeResults = false) {
     title.className = 'place-name';
     title.textContent = place.name;
     content.appendChild(title);
-    const area = [...new Set([properties.city, properties.country]
-        .filter(value => value && value !== place.name))].join(', ');
+    const area = accuracy === null
+        ? [...new Set([properties.city, properties.country]
+            .filter(value => value && value !== place.name))].join(', ')
+        : `Accuracy about ${Math.round(accuracy)} m`;
     if (area) {
         const location = document.createElement('div');
         location.className = 'place-meta';
@@ -475,7 +531,21 @@ function showSearchPlace(feature, closeResults = false) {
     status.className = 'atlas-save-status';
     status.setAttribute('role', 'status');
     content.append(button, status);
-    const popup = {place, button, status, result: null};
+    const popup = {place, button, status, result: null, nameInput: null};
+    if (accuracy !== null) {
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.value = place.name;
+        nameInput.maxLength = 250;
+        nameInput.setAttribute('aria-label', 'Place name');
+        nameInput.addEventListener('input', () => {
+            popup.place.name = nameInput.value.trim();
+            popup.result = null;
+            updateSavePopup();
+        });
+        content.insertBefore(nameInput, button);
+        popup.nameInput = nameInput;
+    }
     button.addEventListener('click', () => requestSave(popup));
     savePopup = popup;
     updateSavePopup();
@@ -518,10 +588,43 @@ if (__SAVE_COMPONENT__) {
     window.parent.postMessage({type: 'viaterra:mapReady'}, '*');
 }
 
+if (locateButton && locationStatus) {
+    locateButton.addEventListener('click', () => {
+        if (!window.isSecureContext || !navigator.geolocation) {
+            locationStatus.textContent = 'Use HTTPS or localhost to access your location.';
+            return;
+        }
+
+        const sequence = ++searchSequence;
+        searchResults.style.display = 'none';
+        locateButton.disabled = true;
+        locationStatus.textContent = 'Finding your location…';
+
+        navigator.geolocation.getCurrentPosition(({coords}) => {
+            locateButton.disabled = false;
+            if (sequence !== searchSequence) return;
+            locationStatus.textContent = '';
+            showSearchPlace({
+                geometry: {coordinates: [coords.longitude, coords.latitude]},
+                properties: {name: 'My location'}
+            }, true, coords.accuracy);
+        }, error => {
+            locateButton.disabled = false;
+            if (sequence !== searchSequence) return;
+            locationStatus.textContent = {
+                1: 'Allow location access in your browser or open Echoes directly.',
+                2: 'Your device could not find its location. Try again.',
+                3: 'Finding your location timed out. Try again.'
+            }[error.code] || 'Could not find your location. Try again.';
+        }, {enableHighAccuracy: true, timeout: 12000, maximumAge: 0});
+    });
+}
+
 if (searchInput && searchResults) {
     searchInput.addEventListener('input', () => {
         searchSequence++;
         searchResults.style.display = 'none';
+        if (locationStatus) locationStatus.textContent = '';
     });
     searchInput.addEventListener('keydown', async event => {
         if (event.key !== 'Enter') return;
@@ -531,6 +634,7 @@ if (searchInput && searchResults) {
         if (query.length < 3) return;
 
         const sequence = ++searchSequence;
+        if (locationStatus) locationStatus.textContent = '';
         searchResults.replaceChildren();
         searchResults.style.display = 'block';
         const message = document.createElement('div');
@@ -1137,14 +1241,27 @@ def render_atlas_map(
     html = _MAP_HTML
     search_control = """
     <div class="atlas-search" id="atlas-search">
-        <input
-            id="atlas-search-input"
-            type="search"
-            placeholder="Search for a place..."
-            aria-label="Search for a place"
-            autocomplete="off"
-            enterkeyhint="search"
-        >
+        <div class="atlas-search-bar">
+            <input
+                id="atlas-search-input"
+                type="search"
+                placeholder="Search for a place..."
+                aria-label="Search for a place"
+                autocomplete="off"
+                enterkeyhint="search"
+            >
+            <button type="button" id="atlas-locate" class="atlas-locate"
+                    title="Use my location" aria-label="Use my location">
+                <svg width="20" height="20" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="7"/>
+                    <circle cx="12" cy="12" r="2.5"/>
+                    <path d="M12 2v3m0 14v3M2 12h3m14 0h3"/>
+                </svg>
+            </button>
+        </div>
+        <div id="atlas-location-status" class="atlas-location-status" role="status"></div>
         <div id="atlas-search-results" class="atlas-search-results"></div>
     </div>
     """

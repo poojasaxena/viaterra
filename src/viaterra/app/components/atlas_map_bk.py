@@ -1,6 +1,7 @@
 """Viaterra's interactive nautical atlas (MapLibre + OpenFreeMap)."""
 
 import json
+from pathlib import Path
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -256,6 +257,36 @@ body {
     background: #F1EADC;
 }
 
+.atlas-save-popup {
+    color: #254C60;
+    padding: 2px 8px 2px 2px;
+}
+
+.atlas-save-button {
+    margin-top: 8px;
+    padding: 6px 12px;
+    min-height: 36px;
+    border: 1px solid #376E80;
+    border-radius: 16px;
+    background: #FFFCF5;
+    color: #254C60;
+    cursor: pointer;
+    font: inherit;
+}
+
+.atlas-save-button:hover:not(:disabled) {
+    background: #E2EEEB;
+}
+
+.atlas-save-button:disabled {
+    opacity: 0.65;
+    cursor: default;
+}
+
+.atlas-save-status:not(:empty) {
+    margin-top: 6px;
+}
+
 /* A generic decorative element for the atlas */
 .viaterra-decoration {
     position: absolute;
@@ -344,12 +375,16 @@ const SEA_RGB = [
 
 const geojson = {
   type: 'FeatureCollection',
-  features: points.map((p, i) => ({
+  features: placeFeatures(points)
+};
+
+function placeFeatures(places) {
+  return places.map((p, i) => ({
     type: 'Feature', id: i,
     properties: {name: p.name, country: p.country_code || ''},
     geometry: {type: 'Point', coordinates: [p.longitude, p.latitude]}
-  }))
-};
+  }));
+}
 
 
 const MAP_POSITION = __MAP_POSITION__;
@@ -368,21 +403,87 @@ const map = new maplibregl.Map({
 const searchInput = document.getElementById('atlas-search-input');
 const searchResults = document.getElementById('atlas-search-results');
 let searchMarker = null;
+let saveToken = null;
+let savePopup = null;
+let saveRequest = null;
+let searchSequence = 0;
 
-// Preview a candidate immediately, while keeping the result list available.
+function searchPlaceLabel(properties) {
+    return [...new Set([properties.name, properties.city, properties.country]
+        .filter(Boolean))].join(', ');
+}
+
+function updateSavePopup() {
+    if (!savePopup) return;
+    const {button, status, result} = savePopup;
+    button.hidden = !saveToken || result?.status === 'saved';
+    button.disabled = saveRequest !== null;
+    button.textContent = saveRequest?.popup === savePopup ? 'Saving…'
+        : result?.status === 'nearby' ? 'Save separate flag' : 'Save as visited';
+    status.textContent = saveToken ? (result?.message || '') : '';
+}
+
+function requestSave(popup) {
+    if (!saveToken || saveRequest) return;
+    searchResults.style.display = 'none';
+    const id = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
+    const confirm = popup.result?.status === 'nearby' ? popup.result.id : null;
+    saveRequest = {id, popup};
+    updateSavePopup();
+    window.parent.postMessage({
+        type: 'viaterra:save',
+        request: {id, place: popup.place, confirm, token: saveToken}
+    }, '*');
+}
+
 function showSearchPlace(feature, closeResults = false) {
     const properties = feature.properties || {};
     const [longitude, latitude] = feature.geometry.coordinates;
-    const label = [properties.name, properties.city, properties.country]
-        .filter(Boolean).join(', ');
+    const label = searchPlaceLabel(properties);
+    const place = {
+        name: properties.name || label,
+        longitude,
+        latitude,
+        country: properties.country || '',
+        country_alpha2: properties.countrycode || ''
+    };
 
-    // Set the coordinates immediately: no long animation from the world view.
     map.jumpTo({center: [longitude, latitude], zoom: 16});
 
     if (searchMarker) searchMarker.remove();
+
+    const content = document.createElement('div');
+    content.className = 'atlas-save-popup';
+    const title = document.createElement('div');
+    title.className = 'place-name';
+    title.textContent = place.name;
+    content.appendChild(title);
+    const area = [...new Set([properties.city, properties.country]
+        .filter(value => value && value !== place.name))].join(', ');
+    if (area) {
+        const location = document.createElement('div');
+        location.className = 'place-meta';
+        location.textContent = area;
+        content.appendChild(location);
+    }
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.hidden = true;
+    button.className = 'atlas-save-button';
+    const status = document.createElement('div');
+    status.className = 'atlas-save-status';
+    status.setAttribute('role', 'status');
+    content.append(button, status);
+    const popup = {place, button, status, result: null};
+    button.addEventListener('click', () => requestSave(popup));
+    savePopup = popup;
+    updateSavePopup();
+
     searchMarker = new maplibregl.Marker({color: '#713F70'})
         .setLngLat([longitude, latitude])
-        .setPopup(new maplibregl.Popup({offset: 25}).setText(label))
+        .setPopup(new maplibregl.Popup({offset: 25, maxWidth: '240px'})
+            .setDOMContent(content))
         .addTo(map);
     searchMarker.togglePopup();
 
@@ -392,7 +493,36 @@ function showSearchPlace(feature, closeResults = false) {
     }
 }
 
+if (__SAVE_COMPONENT__) {
+    window.addEventListener('message', event => {
+        if (event.source !== window.parent || event.data?.type !== 'viaterra:state') return;
+
+        const {token, result, places} = event.data;
+        if (token !== saveToken && savePopup) savePopup.result = null;
+        if (token !== saveToken) saveRequest = null;
+        saveToken = token;
+        if (Array.isArray(places)) {
+            geojson.features = placeFeatures(places);
+            map.getSource('visited-places')?.setData(geojson);
+        }
+
+        if (saveRequest && result?.id === saveRequest.id) {
+            saveRequest.popup.result = result;
+            if (result.status === 'saved' && saveRequest.popup === savePopup) {
+                searchMarker.getElement().style.visibility = 'hidden';
+            }
+            saveRequest = null;
+        }
+        updateSavePopup();
+    });
+    window.parent.postMessage({type: 'viaterra:mapReady'}, '*');
+}
+
 if (searchInput && searchResults) {
+    searchInput.addEventListener('input', () => {
+        searchSequence++;
+        searchResults.style.display = 'none';
+    });
     searchInput.addEventListener('keydown', async event => {
         if (event.key !== 'Enter') return;
         event.preventDefault();
@@ -400,6 +530,7 @@ if (searchInput && searchResults) {
         const query = searchInput.value.trim();
         if (query.length < 3) return;
 
+        const sequence = ++searchSequence;
         searchResults.replaceChildren();
         searchResults.style.display = 'block';
         const message = document.createElement('div');
@@ -413,7 +544,14 @@ if (searchInput && searchResults) {
             const response = await fetch(url);
             if (!response.ok) throw new Error('Search unavailable');
             const data = await response.json();
-            const features = data.features || [];
+            if (sequence !== searchSequence) return;
+            const features = (data.features || []).filter(feature => {
+                const coords = feature.geometry?.coordinates;
+                return feature.geometry?.type === 'Point' && coords?.length >= 2
+                    && Number.isFinite(coords[0]) && Number.isFinite(coords[1])
+                    && Math.abs(coords[0]) <= 180 && Math.abs(coords[1]) <= 90
+                    && searchPlaceLabel(feature.properties || {});
+            });
             searchResults.replaceChildren();
             if (!features.length) {
                 message.textContent = 'No places found';
@@ -424,9 +562,7 @@ if (searchInput && searchResults) {
             // Enter previews the best match, just as the user expects.
             showSearchPlace(features[0]);
             for (const feature of features) {
-                const properties = feature.properties || {};
-                const label = [properties.name, properties.city, properties.country]
-                    .filter(Boolean).join(', ');
+                const label = searchPlaceLabel(feature.properties || {});
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.textContent = label;
@@ -434,6 +570,7 @@ if (searchInput && searchResults) {
                 searchResults.appendChild(button);
             }
         } catch (error) {
+            if (sequence !== searchSequence) return;
             message.textContent = 'Search temporarily unavailable';
             searchResults.replaceChildren(message);
         }
@@ -840,11 +977,16 @@ def render_atlas_map(
     *,
     interactive: bool = False,
     decorations: bool | None = None,
-) -> None:
+    save_enabled: bool | None = None,
+    save_token: str | None = None,
+    save_result: dict | None = None,
+    recently_saved: list[dict] | None = None,
+) -> dict | None:
     """Render the nautical atlas, fixed on the homepage or navigable elsewhere.
 
     The existing no-argument homepage call remains unchanged. Interactive maps
-    omit the homepage souvenirs by default.
+    omit the homepage souvenirs by default. Echoes opts into the pin-saving
+    component by passing its owner authorization as save_enabled.
     """
     if decorations is None:
         decorations = not interactive
@@ -891,9 +1033,22 @@ def render_atlas_map(
         )
         return
 
-    if not places:
+    use_save_component = interactive and save_enabled is not None
+    if not places and not use_save_component:
         st.info("No geolocated places are available in Neon yet.")
         return
+
+    places = list(places or [])
+    if use_save_component and recently_saved:
+        existing = {
+            (place["name"], float(place["latitude"]), float(place["longitude"]))
+            for place in places
+        }
+        for place in recently_saved:
+            identity = (place["name"], place["latitude"], place["longitude"])
+            if identity not in existing:
+                places.append(place)
+                existing.add(identity)
 
     # Prepare location data
     safe_json = json.dumps(
@@ -988,6 +1143,7 @@ def render_atlas_map(
             placeholder="Search for a place..."
             aria-label="Search for a place"
             autocomplete="off"
+            enterkeyhint="search"
         >
         <div id="atlas-search-results" class="atlas-search-results"></div>
     </div>
@@ -998,6 +1154,7 @@ def render_atlas_map(
         search_control if interactive else "",
     )
 
+    html = html.replace("__SAVE_COMPONENT__", json.dumps(use_save_component))
     html = html.replace("__INTERACTIVE__", json.dumps(interactive))
     html = html.replace("__MAX_ZOOM__", "19" if interactive else "17")
     html = html.replace(
@@ -1021,7 +1178,19 @@ def render_atlas_map(
     html = html.replace("__FRAME_SLICE_VERTICAL__", str(frame_slice_vertical))
     html = html.replace("__FRAME_SLICE_HORIZONTAL__", str(frame_slice_horizontal))
 
-    # Render the map
+    if use_save_component:
+        atlas_component = components.declare_component(
+            "echoes_atlas", path=str(Path(__file__).with_name("atlas_frontend"))
+        )
+        return atlas_component(
+            map_html=html,
+            height=map_height,
+            save_token=save_token if save_enabled else None,
+            save_result=save_result,
+            places=json.loads(safe_json),
+            key="viaterra_echoes_atlas",
+        )
+
     components.html(
         html,
         height=map_height,
