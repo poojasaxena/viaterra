@@ -480,6 +480,7 @@ __INTERACTIVE_ORNAMENT_CSS__
 <div class="frame">
     <div id="map" role="application" aria-label="Interactive maritime atlas of individually marked visited places"></div>
     __SEARCH_CONTROL__
+    __JOURNEY_CONTROLS__
     <!-- Fixed cartographic ornament: not a geographic pin or map feature. -->
 
 <img
@@ -518,6 +519,7 @@ import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-
 
 const points = __PLACES__;
 const JOURNEY = __JOURNEY__;
+const journeyEditor = __JOURNEY_EDITOR__;
 const MEMORIES_ONLY = __MEMORIES_ONLY__;
 const HEART_PATH = 'M20 30 10.5 20.4C3.5 13.4 13.4 6 20 13.5C26.6 6 36.5 13.4 29.5 20.4Z';
 let savedPlaces = points;
@@ -1342,12 +1344,163 @@ if (savedFinder) {
     });
 }
 
-function addJourneyRoute() {
-    if (!points.length) return;
+function fitJourneyView(coordinates) {
+    if (!coordinates.length) return;
+    if (coordinates.length === 1) {
+        map.jumpTo({center: coordinates[0], zoom: 10});
+        return;
+    }
+    const bounds = new maplibregl.LngLatBounds(coordinates[0], coordinates[0]);
+    for (const coordinate of coordinates) bounds.extend(coordinate);
+    map.fitBounds(bounds, {padding: 50, maxZoom: 11, duration: 0});
+}
+
+let chooseJourneyPin;
+
+function selectJourneyStop(features) {
+    chooseJourneyPin(features);
+}
+
+function setupJourneyEditor() {
+    const byKey = new Map(journeyEditor.places.map(place => [place.place_key, place]));
+    const keys = [...journeyEditor.keys];
+    const history = [];
+    const title = document.getElementById('journey-title');
+    const country = document.getElementById('journey-country');
+    const undo = document.getElementById('journey-undo');
+    const save = document.getElementById('journey-save');
+    const cancel = document.getElementById('journey-cancel');
+    const status = document.getElementById('journey-status');
+    let pending = null;
+    const controls = document.getElementById('journey-controls');
+    const chooser = document.getElementById('journey-pin-chooser');
+    const choices = document.getElementById('journey-pin-choices');
+    const back = document.getElementById('journey-pin-back');
+
+    function closeChooser() {
+        chooser.hidden = true;
+        controls.hidden = false;
+        choices.replaceChildren();
+    }
+
+    back.addEventListener('click', closeChooser);
+    chooser.addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeChooser();
+    });
+    title.value = journeyEditor.title;
+
+    const countries = new Map();
+    for (const place of byKey.values()) {
+        if (place.country_code) countries.set(place.country_code, place.country || place.country_code);
+    }
+    country.add(new Option('Choose a country to show pins', ''));
+    for (const [code, name] of [...countries].sort((a, b) => a[1].localeCompare(b[1]))) {
+        country.add(new Option(name, code));
+    }
+    country.add(new Option('All saved pins', '*'));
+    country.value = countries.has(journeyEditor.country) ? journeyEditor.country : '';
+
+    function updateButtons() {
+        undo.disabled = Boolean(pending) || !history.length;
+        save.disabled = Boolean(pending) || !keys.length || !title.value.trim();
+        cancel.disabled = Boolean(pending);
+        title.disabled = country.disabled = Boolean(pending);
+    }
+
+    function refresh() {
+        const selected = new Set(keys);
+        const route = keys.map((key, i) => ({...byKey.get(key), stop_number: i + 1}))
+            .filter(place => place.latitude != null && place.longitude != null);
+        const candidates = [...byKey.values()].filter(place =>
+            !selected.has(place.place_key) && place.latitude != null && place.longitude != null
+            && (country.value === '*' || (country.value && place.country_code === country.value)));
+        geojson.features = placeFeatures([...candidates, ...route]);
+        map.getSource('visited-places').setData(geojson);
+        addJourneyRoute(route);
+        status.textContent = keys.length ? `${keys.length} ${keys.length === 1 ? 'stop' : 'stops'} · ${byKey.get(keys.at(-1)).name}` : '';
+        updateButtons();
+        return country.value ? [...byKey.values()].filter(place =>
+            place.latitude != null && place.longitude != null
+            && (country.value === '*' || place.country_code === country.value)) : [];
+    }
+
+    function toggle(key) {
+        if (pending || !byKey.has(key)) return;
+        history.push([...keys]);
+        const index = keys.indexOf(key);
+        if (index === -1) keys.push(key);
+        else keys.splice(index, 1);
+        closeChooser();
+        refresh();
+    }
+
+    chooseJourneyPin = features => {
+        if (pending) return;
+        closeChooser();
+        const unique = [...new Map(features.map(f => [f.properties.placeKey, f])).values()];
+        if (unique.length === 1) {
+            toggle(unique[0].properties.placeKey);
+            return;
+        }
+        for (const f of unique) {
+            const button = document.createElement('button');
+            const key = f.properties.placeKey;
+            button.type = 'button';
+            button.className = 'journey-pin-button';
+            button.textContent = `${keys.includes(key) ? 'Remove' : 'Add'} ${f.properties.name}`;
+            button.addEventListener('click', () => toggle(key));
+            choices.appendChild(button);
+        }
+        controls.hidden = true;
+        chooser.hidden = false;
+        choices.scrollTop = 0;
+        back.focus({preventScroll: true});
+    };
+
+    function submit(action) {
+        if (pending) return;
+        pending = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
+        updateButtons();
+        window.parent.postMessage({
+            type: 'viaterra:save',
+            request: {id: pending, token: journeyEditor.token, action, title: title.value, keys: [...keys]}
+        }, '*');
+    }
+
+    title.addEventListener('input', updateButtons);
+    country.addEventListener('change', () => {
+        closeChooser();
+        fitJourneyView(refresh().map(place => [place.longitude, place.latitude]));
+    });
+    undo.addEventListener('click', () => {
+        if (!history.length || pending) return;
+        keys.splice(0, keys.length, ...history.pop());
+        refresh();
+    });
+    save.addEventListener('click', () => submit('save_journey'));
+    cancel.addEventListener('click', () => submit('cancel'));
+    window.addEventListener('message', event => {
+        if (event.source !== window.parent || event.data?.type !== 'viaterra:state') return;
+        const result = event.data.result;
+        if (pending && result?.id === pending) {
+            pending = null;
+            status.textContent = result.message;
+            updateButtons();
+        }
+    });
+    const candidates = refresh();
+    const initial = candidates.length ? candidates : keys.map(key => byKey.get(key));
+    fitJourneyView(initial.filter(place => place.latitude != null && place.longitude != null)
+        .map(place => [place.longitude, place.latitude]));
+    window.parent.postMessage({type: 'viaterra:mapReady'}, '*');
+}
+
+
+function addJourneyRoute(stops, fit = false) {
 
     // Keep the line continuous across the antimeridian.
     const coordinates = [];
-    for (const point of points) {
+    for (const point of stops) {
         let longitude = point.longitude;
         if (coordinates.length) {
             const previous = coordinates.at(-1)[0];
@@ -1356,29 +1509,28 @@ function addJourneyRoute() {
         coordinates.push([longitude, point.latitude]);
     }
 
-    if (coordinates.length === 1) {
-        map.jumpTo({center: coordinates[0], zoom: 10});
-        return;
-    }
-
     const features = [];
-    for (let i = 1; i < points.length; i++) {
-        if (points[i].stop_number === points[i - 1].stop_number + 1) {
+    for (let i = 1; i < stops.length; i++) {
+        if (stops[i].stop_number === stops[i - 1].stop_number + 1) {
             features.push({
                 type: 'Feature', properties: {},
                 geometry: {type: 'LineString', coordinates: coordinates.slice(i - 1, i + 1)}
             });
         }
     }
-    map.addSource('journey-route', {type: 'geojson', data: {type: 'FeatureCollection', features}});
+    const data = {type: 'FeatureCollection', features};
+    const source = map.getSource('journey-route');
+    if (source) {
+        source.setData(data);
+        return;
+    }
+    map.addSource('journey-route', {type: 'geojson', data});
     map.addLayer({
         id: 'journey-route', type: 'line', source: 'journey-route',
         layout: {'line-cap': 'round', 'line-join': 'round'},
         paint: {'line-color': '#82475E', 'line-width': 3, 'line-opacity': 0.9, 'line-dasharray': [2, 2]}
     });
-    const bounds = new maplibregl.LngLatBounds(coordinates[0], coordinates[0]);
-    for (const coordinate of coordinates) bounds.extend(coordinate);
-    map.fitBounds(bounds, {padding: 50, maxZoom: 11, duration: 0});
+    if (fit) fitJourneyView(coordinates);
 }
 
 function addBurgeeLayer(flagImage, heartImage) {
@@ -1404,8 +1556,9 @@ function addBurgeeLayer(flagImage, heartImage) {
     map.addLayer({
       id: 'journey-stop-numbers', type: 'symbol', source: 'visited-places',
       layout: {
-        'text-field': ['to-string', ['get', 'stopNumber']],
-        'text-size': 12, 'text-offset': [0, 1.3],
+        'text-field': ['case', ['>', ['number', ['get', 'stopNumber'], 0], 0],
+            ['to-string', ['get', 'stopNumber']], ''],
+        'text-size': 15, 'text-offset': [0, 1.0],
         'text-anchor': 'top', 'text-allow-overlap': true,
       },
       paint: {'text-color': '#61324A', 'text-halo-color': '#FFFCF5', 'text-halo-width': 1}
@@ -1414,6 +1567,10 @@ function addBurgeeLayer(flagImage, heartImage) {
   map.on('click', 'burgee-pins', e => {
     if (!e.features?.length) return;
     const f = e.features[0];
+    if (journeyEditor) {
+        selectJourneyStop(e.features);
+        return;
+    }
     const place = {...f.properties};
     if (JOURNEY) place.name = `${place.stopNumber}. ${place.name}`;
     openVisitedPlace(place, f.geometry.coordinates);
@@ -1462,7 +1619,7 @@ map.on('load', () => {
     // Both textures must be registered first.
     // -------------------------------------------------
     applyMaritimeStyle();
-    if (JOURNEY) addJourneyRoute();
+    if (JOURNEY) addJourneyRoute(points, !journeyEditor);
 
     // -------------------------------------------------
     // 4. Load and display visited-place markers
@@ -1484,7 +1641,10 @@ map.on('load', () => {
               <path d="${HEART_PATH}" fill="#FFFCF5"/>
            </svg>`));
     }
-    Promise.all(markers).then(([flag, heart]) => addBurgeeLayer(flag, heart)).catch(() => {
+    Promise.all(markers).then(([flag, heart]) => {
+        addBurgeeLayer(flag, heart);
+        if (journeyEditor) setupJourneyEditor();
+    }).catch(() => {
         error.textContent = 'The map marker could not be loaded.';
         error.style.display = 'block';
     });
@@ -1493,6 +1653,75 @@ map.on('load', () => {
 </body>
 </html>
 """
+
+_JOURNEY_CONTROLS = """
+<section class="atlas-search" id="journey-editor" aria-label="Journey editor">
+    <div id="journey-controls">
+    <input id="journey-title" aria-label="Journey title" placeholder="Journey title" maxlength="120">
+    <select id="journey-country" aria-label="Show saved pins by country"></select>
+    <p>Click saved pins in travel order.</p>
+    <div class="journey-actions">
+        <button type="button" id="journey-undo">Undo</button>
+        <button type="button" id="journey-save">Save journey</button>
+        <button type="button" id="journey-cancel">Cancel</button>
+    </div>
+    <div id="journey-status" role="status"></div>
+    </div>
+    <div id="journey-pin-chooser" hidden>
+        <div class="journey-actions" style="align-items:center; justify-content:space-between">
+            <strong>Choose a saved pin</strong>
+            <button type="button" id="journey-pin-back">Back</button>
+        </div>
+        <div id="journey-pin-choices"></div>
+    </div>
+</section>
+<style>
+#journey-editor {
+    width: min(330px, calc(100% - 85px));
+    padding: 10px;
+    border: 1px solid #D8CFBE;
+    border-radius: 8px;
+    background: #FFFCF5;
+    color: #254C60;
+    box-shadow: 0 3px 12px #1d384026;
+}
+#journey-editor input, #journey-editor select {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 5px;
+    border: 1px solid #D8CFBE;
+    border-radius: 6px;
+    background: #FFFCF5;
+    color: inherit;
+    font: inherit;
+}
+#journey-editor p { margin: 3px 0 7px; }
+.journey-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.journey-actions button, .journey-pin-button {
+    border: 1px solid #376E80;
+    border-radius: 6px;
+    padding: 6px 9px;
+    min-height: 36px;
+    font: inherit;
+    background: #FFFCF5;
+    color: #254C60;
+    cursor: pointer;
+}
+#journey-save { background: #254C60; color: #FFFCF5; }
+.journey-actions button:disabled { opacity: .45; cursor: default; }
+#journey-status:not(:empty) { margin-top: 6px; }
+#journey-editor [hidden] { display: none; }
+#journey-pin-choices { max-height: min(260px, 45vh); overflow-y: auto; }
+.journey-pin-button {
+    display: block;
+    width: 100%;
+    margin: 4px 0;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+</style>
+"""
+
 
 def render_atlas_map(
     *,
@@ -1505,6 +1734,7 @@ def render_atlas_map(
     places_loader: Callable[[], list[dict]] | None = None,
     memories_only: bool = False,
     journey: bool = False,
+    journey_editor: dict | None = None,
 ) -> dict | None:
     """Render the nautical atlas, fixed on the homepage or navigable elsewhere.
 
@@ -1712,7 +1942,10 @@ def render_atlas_map(
     """
     html = html.replace("__SAVED_FINDER__", saved_finder if memories_only else "")
     html = html.replace("__MEMORIES_ONLY__", json.dumps(memories_only))
+    editor_json = json.dumps(journey_editor).replace("<", "\\u003c")
     html = html.replace("__JOURNEY__", json.dumps(journey))
+    html = html.replace("__JOURNEY_EDITOR__", editor_json)
+    html = html.replace("__JOURNEY_CONTROLS__", _JOURNEY_CONTROLS if journey_editor else "")
     html = html.replace("__LEGEND_START__", '<div class="legend" hidden>' if memories_only or journey else '<div class="legend">')
     html = html.replace(
         "__MEMORY_LEGEND__",
@@ -1743,9 +1976,10 @@ def render_atlas_map(
     html = html.replace("__FRAME_SLICE_VERTICAL__", str(frame_slice_vertical))
     html = html.replace("__FRAME_SLICE_HORIZONTAL__", str(frame_slice_horizontal))
 
-    if use_save_component:
+    if use_save_component or journey_editor:
         atlas_component = components.declare_component(
-            "echoes_atlas", path=str(Path(__file__).with_name("atlas_frontend"))
+            "footprints_atlas" if journey_editor else "echoes_atlas",
+            path=str(Path(__file__).with_name("atlas_frontend")),
         )
         return atlas_component(
             map_html=html,
@@ -1753,7 +1987,7 @@ def render_atlas_map(
             save_token=save_token if save_enabled else None,
             save_result=save_result,
             places=json.loads(safe_json),
-            key="viaterra_echoes_atlas",
+            key=f"footprints_{journey_editor['token']}" if journey_editor else "viaterra_echoes_atlas",
         )
 
     components.html(

@@ -2,6 +2,7 @@
 
 import hmac
 import logging
+import secrets
 
 import streamlit as st
 
@@ -15,12 +16,6 @@ _LOGGER = logging.getLogger(__name__)
 _DRAFT = "footprints_draft"
 _SELECTION = "footprints_journey"
 _SELECT_SAVED = "footprints_select_saved"
-
-
-def move_stop(keys: list[str], index: int, direction: int) -> None:
-    target = index + direction
-    if 0 <= index < len(keys) and 0 <= target < len(keys):
-        keys[index], keys[target] = keys[target], keys[index]
 
 
 def render_footprints() -> None:
@@ -64,11 +59,13 @@ def render_footprints() -> None:
         new, edit = st.columns(2)
         if new.button("New journey"):
             st.session_state["footprints_title"] = ""
-            st.session_state[_DRAFT] = {"id": None, "keys": []}
+            st.session_state[_DRAFT] = {"id": None, "keys": [], "token": secrets.token_urlsafe(24)}
         if edit.button("Edit journey", disabled=journey_id is None):
             st.session_state["footprints_title"] = journeys[journey_id]
             st.session_state[_DRAFT] = {
                 "id": journey_id, "keys": [place["place_key"] for place in stops],
+                "token": secrets.token_urlsafe(24),
+                "country": stops[0].get("country_code") if stops else None,
             }
 
     draft = st.session_state.get(_DRAFT) if authorized else None
@@ -83,10 +80,20 @@ def render_footprints() -> None:
             _LOGGER.exception("Could not load saved places for Footprints")
             st.error("Viaterra couldn't load your saved places.")
             return
-        stops = [places[key] for key in draft["keys"] if key in places]
-        render_atlas_map(interactive=True, decorations=False, journey=True,
-                         places_loader=lambda: stops)
-        edit_journey(draft, places)
+        draft.setdefault("token", secrets.token_urlsafe(24))
+        request = render_atlas_map(
+            interactive=True, decorations=False, journey=True,
+            places_loader=list,
+            journey_editor={
+                "token": draft["token"],
+                "title": st.session_state.get("footprints_title", ""),
+                "keys": [key for key in draft["keys"] if key in places],
+                "places": list(places.values()),
+                "country": draft.get("country"),
+            },
+            save_result=draft.get("result"),
+        )
+        handle_journey_action(request, draft, places)
         return
 
     render_atlas_map(interactive=True, decorations=False, journey=True,
@@ -98,54 +105,37 @@ def render_footprints() -> None:
         st.info("No journeys yet.")
 
 
-def edit_journey(draft: dict, places: dict[str, dict]) -> None:
-    title = st.text_input("Journey title", key="footprints_title", max_chars=120)
-    keys = draft["keys"]
-    countries = sorted({place["country"] for place in places.values() if place.get("country")})
-    country = st.selectbox("Filter saved places by country", [None, *countries],
-                           format_func=lambda value: value or "All countries")
-
-    def label(key: str) -> str:
-        place = places[key]
-        return " · ".join(dict.fromkeys(filter(None, (
-            place["name"], place.get("city"), place.get("country"),
-        ))))
-
-    choices = [key for key, place in places.items() if key not in keys
-               and place["latitude"] is not None and place["longitude"] is not None
-               and (country is None or place.get("country") == country)]
-    picker, add = st.columns([4, 1])
-    candidate = picker.selectbox("Find a saved place", choices, index=None, format_func=label)
-    if add.button("Add stop", disabled=candidate is None):
-        keys.append(candidate)
-        st.rerun()
-
-    for index, key in enumerate(keys):
-        name, up, down, remove = st.columns([6, 1, 1, 2])
-        name.write(f"{index + 1}. {label(key) if key in places else 'Unavailable place'}")
-        if up.button("↑", key=f"footprints_up_{key}", help="Move up", disabled=index == 0):
-            move_stop(keys, index, -1)
-            st.rerun()
-        if down.button("↓", key=f"footprints_down_{key}", help="Move down",
-                       disabled=index == len(keys) - 1):
-            move_stop(keys, index, 1)
-            st.rerun()
-        if remove.button("Remove", key=f"footprints_remove_{key}"):
-            keys.pop(index)
-            st.rerun()
-
-    save, cancel = st.columns(2)
-    if save.button("Save journey", type="primary",
-                   disabled=not title.strip() or not keys or any(key not in places for key in keys)):
-        try:
-            journey_id = save_journey(title, keys, draft["id"])
-        except Exception:
-            _LOGGER.exception("Could not save journey")
-            st.error("Viaterra couldn't save this journey. Your draft is still here.")
-        else:
-            st.session_state[_SELECT_SAVED] = journey_id
-            st.session_state.pop(_DRAFT, None)
-            st.rerun()
-    if cancel.button("Cancel"):
+def handle_journey_action(request: object, draft: dict, places: dict[str, dict]) -> None:
+    if not isinstance(request, dict) or request.get("token") != draft["token"]:
+        return
+    request_id = request.get("id")
+    if not isinstance(request_id, str) or not request_id or request_id == draft.get("request_id"):
+        return
+    draft["request_id"] = request_id
+    if request.get("action") == "cancel":
         st.session_state.pop(_DRAFT, None)
         st.rerun()
+        return
+    if request.get("action") != "save_journey":
+        return
+
+    title, keys = request.get("title"), request.get("keys")
+    if (
+        not isinstance(title, str) or not title.strip() or len(title) > 120
+        or not isinstance(keys, list) or not keys
+        or any(not isinstance(key, str) or key not in places for key in keys)
+        or len(keys) != len(set(keys))
+    ):
+        draft["result"] = {"id": request_id, "message": "Enter a title and select saved stops."}
+        st.rerun()
+        return
+
+    try:
+        journey_id = save_journey(title, keys, draft["id"])
+    except Exception:
+        _LOGGER.exception("Could not save journey")
+        draft["result"] = {"id": request_id, "message": "Could not save. Your route is still here."}
+    else:
+        st.session_state[_SELECT_SAVED] = journey_id
+        st.session_state.pop(_DRAFT, None)
+    st.rerun()

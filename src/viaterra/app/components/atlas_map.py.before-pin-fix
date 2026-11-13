@@ -1,0 +1,1965 @@
+"""Viaterra's interactive nautical atlas (MapLibre + OpenFreeMap)."""
+
+import json
+from collections.abc import Callable
+from pathlib import Path
+
+import streamlit as st
+import streamlit.components.v1 as components
+import base64
+from viaterra.processing.paths import load_config, require_asset
+from viaterra.db.queries import get_visited_places
+from html import escape
+
+_MAP_HTML = r"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link href="https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.css" rel="stylesheet" />
+<style>
+/* ============================================================
+   VIATERRA — MAP STYLES
+   Keep all map CSS inside this <style> element.
+   ============================================================ */
+
+/* 1. Palette and basic layout */
+:root {
+    --sea: __SEA_COLOR__;
+    --navy: #F5F0E4;
+    --ivory: #F3E9D5;
+    --gold: #BC985F;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    height: 100%;
+    background: var(--sea);
+    font-family: Georgia, "Times New Roman", serif;
+}
+
+/* Main map container */
+.frame {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border: none;
+    border-radius: 0;
+}
+
+#map {
+    width: 100%;
+    height: 100%;
+}
+
+/* 3. Sailing boat: decorative only, does not intercept map input */
+.nautical-boat {
+    position: absolute;
+    left: 65%;
+    bottom: 38px;
+    width: clamp(120px, 14vw, 205px);
+    height: auto;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0.78;
+    filter: drop-shadow(0 1px 0 rgba(18, 64, 78, 0.08));
+}
+
+
+/* Soft depth beneath the weathered parchment */
+.frame::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 9;
+    pointer-events: none;
+
+    box-shadow:
+        inset 0 0 12px rgba(92, 64, 37, 0.16),
+        inset 0 0 28px rgba(110, 78, 46, 0.10);
+
+    background:
+        radial-gradient(
+            ellipse at top left,
+            rgba(121, 86, 49, 0.12),
+            transparent 23%
+        ),
+        radial-gradient(
+            ellipse at bottom right,
+            rgba(121, 86, 49, 0.12),
+            transparent 23%
+        );
+}
+
+
+
+.frame::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    z-index: 10;
+    pointer-events: none;
+
+    border: __FRAME_WIDTH__px solid transparent;
+
+    border-image-source:
+        url("data:image/png;base64,__WEATHERED_FRAME__");
+
+    border-image-slice:
+        __FRAME_SLICE_VERTICAL__%
+        __FRAME_SLICE_HORIZONTAL__%;
+
+    border-image-width: 1;
+    border-image-repeat: stretch;
+
+    opacity: __FRAME_OPACITY__;
+}
+
+/* Decorative compass rose */
+.nautical-compass {
+    position: absolute;
+    left: 2%;
+    top: 30%;
+    width: 150px;
+    height: auto;
+    opacity: 0.78;
+    z-index: 2;
+    pointer-events: none;
+}
+
+
+/* 4. Bottom-right legend: above MapLibre's attribution */
+.legend {
+    position: absolute;
+    right: 14px;
+    bottom: 38px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 10px;
+    background: rgba(250, 247, 238, 0.95);
+    border: 1px solid #D3C9B4;
+    border-radius: 5px;
+    color: #45616A;
+    font: 11px system-ui, sans-serif;
+    white-space: nowrap;
+}
+
+.legend svg {
+    width: 18px;
+    height: 18px;
+    flex: none;
+}
+
+/* 5. MapLibre popup and built-in controls */
+.maplibregl-popup-content {
+    padding: 12px 14px;
+    background: #FBF8F0;
+    color: #254C60;
+    border: 1px solid #C6C7B8;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+}
+
+.maplibregl-popup-close-button {
+    font-size: 18px;
+    color: #45636B;
+}
+
+.place-name {
+    font: 600 14px system-ui, sans-serif;
+    margin-right: 12px;
+    line-height: 1.4;
+}
+
+.place-meta {
+    font: 11px system-ui, sans-serif;
+    letter-spacing: 0.05em;
+    margin-top: 5px;
+    color: #8A755D;
+}
+
+.maplibregl-ctrl-group {
+    border: 1px solid #C6CBC0;
+    background: #FAF8F2;
+}
+
+.maplibregl-ctrl-attrib {
+    font-size: 10px !important;
+}
+
+/* 6. Visible only when the map fails to load */
+.error {
+    position: absolute;
+    top: 45%;
+    left: 8%;
+    right: 8%;
+    z-index: 5;
+    display: none;
+    padding: 20px;
+    text-align: center;
+    color: #613E3E;
+    background: #FFF9F3;
+}
+
+.atlas-search {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    width: min(340px, calc(100% - 85px));
+    z-index: 20;
+    font: 14px system-ui, sans-serif;
+}
+
+.atlas-search-bar {
+    display: flex;
+    gap: 5px;
+}
+
+.legend[hidden],
+#atlas-memory-legend:empty {
+    display: none;
+}
+
+.atlas-visited-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 5px;
+    width: fit-content;
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: #FFFCF5;
+    color: #254C60;
+    cursor: pointer;
+    box-shadow: 0 3px 12px rgba(29, 56, 64, 0.15);
+}
+
+.atlas-visited-toggle[hidden] {
+    display: none;
+}
+
+.atlas-visited-toggle input {
+    margin: 0;
+    accent-color: #82475E;
+}
+
+.atlas-saved-finder {
+    margin-top: 5px;
+    width: fit-content;
+    max-width: 100%;
+    border-radius: 8px;
+    background: #FFFCF5;
+    color: #254C60;
+    box-shadow: 0 3px 12px rgba(29, 56, 64, 0.15);
+}
+
+.atlas-saved-finder[open] {
+    width: 100%;
+}
+
+.atlas-saved-finder summary {
+    padding: 9px 12px;
+    cursor: pointer;
+}
+
+.atlas-saved-finder input {
+    width: calc(100% - 16px);
+    margin: 0 8px;
+    padding: 8px;
+    font: inherit;
+    color: inherit;
+    border: 1px solid #D8CFBE;
+    border-radius: 6px;
+}
+
+.atlas-saved-finder .atlas-search-results:not(:empty) {
+    display: block;
+    padding: 4px;
+    box-shadow: none;
+}
+
+.atlas-locate {
+    flex: 0 0 44px;
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    border: 1px solid #D8CFBE;
+    border-radius: 8px;
+    background: #FFFCF5;
+    color: #254C60;
+    cursor: pointer;
+    box-shadow: 0 3px 12px rgba(29, 56, 64, 0.15);
+}
+
+.atlas-locate:hover:not(:disabled) {
+    background: #E2EEEB;
+}
+
+.atlas-locate:disabled {
+    opacity: 0.65;
+    cursor: wait;
+}
+
+.atlas-search .atlas-search-bar input {
+    min-width: 0;
+    width: 100%;
+    padding: 13px 16px;
+    border: 1px solid #D8CFBE;
+    border-radius: 8px;
+    background: #FFFCF5;
+    color: #254C60;
+    box-shadow: 0 3px 12px rgba(29, 56, 64, 0.15);
+    outline: none;
+}
+
+.atlas-save-popup input {
+    width: 100%;
+    min-height: 36px;
+    margin: 6px 0 2px;
+    border: 1px solid #D8CFBE;
+    border-radius: 6px;
+    padding: 5px 8px;
+    background: #FFFCF5;
+    color: #254C60;
+    font: inherit;
+}
+
+.atlas-location-status:not(:empty) {
+    margin-top: 4px;
+    padding: 8px 12px;
+    border-radius: 7px;
+    background: #FFFCF5;
+    color: #254C60;
+}
+
+.atlas-search input:focus {
+    border-color: #438FA6;
+}
+
+.atlas-search-results {
+    display: none;
+    margin-top: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    background: #FFFCF5;
+    border-radius: 7px;
+    box-shadow: 0 4px 16px rgba(29, 56, 64, 0.18);
+}
+
+.atlas-search-results button {
+    display: block;
+    width: 100%;
+    padding: 11px 14px;
+    border: 0;
+    background: transparent;
+    color: #254C60;
+    text-align: left;
+    cursor: pointer;
+}
+
+.atlas-search-results button:hover {
+    background: #F1EADC;
+}
+
+.atlas-save-popup {
+    color: #254C60;
+    padding: 2px 8px 2px 2px;
+}
+
+.atlas-save-button {
+    margin-top: 8px;
+    padding: 6px 12px;
+    min-height: 36px;
+    border: 1px solid #376E80;
+    border-radius: 16px;
+    background: #FFFCF5;
+    color: #254C60;
+    cursor: pointer;
+    font: inherit;
+}
+
+.atlas-save-button:hover:not(:disabled) {
+    background: #E2EEEB;
+}
+
+.atlas-save-button:disabled {
+    opacity: 0.65;
+    cursor: default;
+}
+
+.atlas-memory-panel {
+    max-height: min(270px, 48vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    width: min(250px, 62vw);
+    color: #254C60;
+}
+
+.atlas-memory-panel details {
+    padding: 5px 0;
+    border-bottom: 1px solid #D8CFBE;
+}
+
+.atlas-memory-panel summary {
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+
+.atlas-memory-panel p {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    margin: 5px 0;
+}
+
+.atlas-memory-panel input,
+.atlas-memory-panel textarea {
+    display: block;
+    width: 100%;
+    padding: 6px;
+    margin-top: 5px;
+    border: 1px solid #D8CFBE;
+    border-radius: 6px;
+    font: inherit;
+    color: inherit;
+    background: #FFFCF5;
+}
+
+.atlas-memory-panel button + button {
+    margin-left: 6px;
+}
+
+.atlas-save-status:not(:empty) {
+    margin-top: 6px;
+}
+
+/* A generic decorative element for the atlas */
+.viaterra-decoration {
+    position: absolute;
+    height: auto;
+    z-index: 11;
+    pointer-events: none;
+    transform-origin: center;
+    filter: drop-shadow(3px 5px 4px rgba(45, 35, 24, 0.20));
+}
+
+@media (max-width: 640px) {
+    .viaterra-decoration {
+        display: none;
+    }
+}
+
+/* Hide fixed-position nautical ornaments on interactive views. */
+__INTERACTIVE_ORNAMENT_CSS__
+
+/* 7. Small screens */
+@media (max-width: 640px) {
+    .nautical-boat {
+        left: 60%;
+        bottom: 34px;
+        width: 100px;
+        opacity: 0.68;
+    }
+
+    .legend {
+        right: 8px;
+        bottom: 36px;
+    }
+}
+</style>
+</head>
+<body>
+<!-- Map layout. The legend and boat float over the interactive map. -->
+<div class="frame">
+    <div id="map" role="application" aria-label="Interactive maritime atlas of individually marked visited places"></div>
+    __SEARCH_CONTROL__
+    __JOURNEY_CONTROLS__
+    <!-- Fixed cartographic ornament: not a geographic pin or map feature. -->
+
+<img
+    class="nautical-boat"
+    src="data:image/png;base64,__SAILBOAT__"
+    alt=""
+    aria-hidden="true"
+>
+
+<img
+    class="nautical-compass"
+    src="data:image/png;base64,__COMPASS__"
+    alt=""
+    aria-hidden="true"
+>
+
+<!-- Travel memorabilia configured in TOML -->
+__DECORATIONS__
+
+
+    __LEGEND_START__
+        <svg viewBox="0 0 40 40" aria-hidden="true">
+            <circle cx="20" cy="20" r="18"
+                    fill="__MARKER_FILL__" stroke="__MARKER_BORDER__" stroke-width="3" />
+            <path d="M15 11 V29" fill="none" stroke="__MARKER_FLAG__"
+                  stroke-width="2.8" stroke-linecap="round" />
+            <path d="M17.5 12 L29 15.5 L17.5 20 Z" fill="__MARKER_FLAG__" />
+        </svg>
+        Where I Have Wandered
+    </div>
+    __MEMORY_LEGEND__
+  <div id="error" class="error">The map couldn't load its base tiles. Check internet access and the browser console.</div>
+</div>
+<script type="module">
+import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs';
+
+const points = __PLACES__;
+const JOURNEY = __JOURNEY__;
+const journeyEditor = __JOURNEY_EDITOR__;
+const MEMORIES_ONLY = __MEMORIES_ONLY__;
+const HEART_PATH = 'M20 30 10.5 20.4C3.5 13.4 13.4 6 20 13.5C26.6 6 36.5 13.4 29.5 20.4Z';
+let savedPlaces = points;
+let showVisitedPins = false;
+
+const SEA_CONFIG = __SEA_SETTINGS__;
+
+const SEA_RGB = [
+    parseInt(SEA_CONFIG.color.slice(1, 3), 16),
+    parseInt(SEA_CONFIG.color.slice(3, 5), 16),
+    parseInt(SEA_CONFIG.color.slice(5, 7), 16),
+];
+
+const geojson = {
+  type: 'FeatureCollection',
+  features: placeFeatures(points)
+};
+
+function placeFeatures(places) {
+  const visible = MEMORIES_ONLY && !showVisitedPins ? places.filter(p => p.has_memory) : places;
+  return visible.map((p, i) => ({
+    type: 'Feature', id: i,
+    properties: {
+        name: p.name,
+        country: p.country_code || '',
+        placeKey: p.place_key || '',
+        hasMemory: p.has_memory === true,
+        stopNumber: JOURNEY ? p.stop_number : ''
+    },
+    geometry: {type: 'Point', coordinates: [p.longitude, p.latitude]}
+  }));
+}
+
+
+const MAP_POSITION = __MAP_POSITION__;
+
+const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://tiles.openfreemap.org/styles/liberty',
+    center: MAP_POSITION.center,
+    zoom: MAP_POSITION.zoom,
+    minZoom: 1.1,
+    maxZoom: __MAX_ZOOM__,
+    renderWorldCopies: true,
+    attributionControl: false
+});
+
+const searchInput = document.getElementById('atlas-search-input');
+const searchResults = document.getElementById('atlas-search-results');
+const locateButton = document.getElementById('atlas-locate');
+const locationStatus = document.getElementById('atlas-location-status');
+const savedFinder = document.getElementById('atlas-saved-finder');
+const savedQuery = document.getElementById('atlas-saved-query');
+const savedResults = document.getElementById('atlas-saved-results');
+const memoryLegend = document.getElementById('atlas-memory-legend');
+const visitedToggle = document.getElementById('atlas-visited-toggle');
+let searchMarker = null;
+let saveToken = null;
+let savePopup = null;
+let saveRequest = null;
+let memoryRequest = null;
+let memoryPopup = null;
+let searchSequence = 0;
+
+function searchPlaceLabel(properties) {
+    return [...new Set([properties.name, properties.city, properties.country]
+        .filter(Boolean))].join(', ');
+}
+
+function updateSavePopup() {
+    if (!savePopup) return;
+    const {button, status, result, nameInput} = savePopup;
+    if (nameInput) {
+        nameInput.hidden = !saveToken;
+        nameInput.disabled = saveRequest?.popup === savePopup || result?.status === 'saved';
+    }
+    button.hidden = !saveToken || result?.status === 'saved';
+    button.disabled = saveRequest !== null || memoryRequest !== null || (nameInput !== null && !nameInput.value.trim());
+    button.textContent = saveRequest?.popup === savePopup ? 'Saving…'
+        : result?.status === 'nearby' ? 'Save separate flag' : 'Save as visited';
+    status.textContent = saveToken ? (result?.message || '') : '';
+}
+
+function requestSave(popup) {
+    if (!saveToken || saveRequest || memoryRequest) return;
+    searchResults.style.display = 'none';
+    const id = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
+    const confirm = popup.result?.status === 'nearby' ? popup.result.id : null;
+    saveRequest = {id, popup};
+    updateSavePopup();
+    window.parent.postMessage({
+        type: 'viaterra:save',
+        request: {id, place: popup.place, confirm, token: saveToken}
+    }, '*');
+}
+
+function showSearchPlace(feature, closeResults = false, accuracy = null) {
+    const properties = feature.properties || {};
+    const [longitude, latitude] = feature.geometry.coordinates;
+    const label = searchPlaceLabel(properties);
+    const place = {
+        name: properties.name || label,
+        longitude,
+        latitude,
+        country: properties.country || '',
+        country_alpha2: properties.countrycode || ''
+    };
+
+    map.jumpTo({center: [longitude, latitude], zoom: 16});
+
+    if (searchMarker) searchMarker.remove();
+
+    const content = document.createElement('div');
+    content.className = 'atlas-save-popup';
+    const title = document.createElement('div');
+    title.className = 'place-name';
+    title.textContent = place.name;
+    content.appendChild(title);
+    const area = accuracy === null
+        ? [...new Set([properties.city, properties.country]
+            .filter(value => value && value !== place.name))].join(', ')
+        : `Accuracy about ${Math.round(accuracy)} m`;
+    if (area) {
+        const location = document.createElement('div');
+        location.className = 'place-meta';
+        location.textContent = area;
+        content.appendChild(location);
+    }
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.hidden = true;
+    button.className = 'atlas-save-button';
+    const status = document.createElement('div');
+    status.className = 'atlas-save-status';
+    status.setAttribute('role', 'status');
+    content.append(button, status);
+    const popup = {place, button, status, result: null, nameInput: null};
+    if (accuracy !== null) {
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.value = place.name;
+        nameInput.maxLength = 250;
+        nameInput.setAttribute('aria-label', 'Place name');
+        nameInput.addEventListener('input', () => {
+            popup.place.name = nameInput.value.trim();
+            popup.result = null;
+            updateSavePopup();
+        });
+        content.insertBefore(nameInput, button);
+        popup.nameInput = nameInput;
+    }
+    button.addEventListener('click', () => requestSave(popup));
+    savePopup = popup;
+    updateSavePopup();
+
+    searchMarker = new maplibregl.Marker({color: '#713F70'})
+        .setLngLat([longitude, latitude])
+        .setPopup(new maplibregl.Popup({offset: 25, maxWidth: '240px'})
+            .setDOMContent(content))
+        .addTo(map);
+    searchMarker.togglePopup();
+
+    if (closeResults) {
+        searchInput.value = label;
+        searchResults.style.display = 'none';
+    }
+}
+
+function refreshVisitedPins() {
+    geojson.features = placeFeatures(savedPlaces);
+    map.getSource('visited-places')?.setData(geojson);
+    if (memoryLegend) {
+        memoryLegend.textContent = !saveToken ? 'Unlock editing to view memories'
+            : showVisitedPins ? 'Hearts: memories · Flags: other visited places'
+            : geojson.features.length ? 'Places with memories'
+            : 'Find a saved place to add your first memory';
+    }
+}
+
+if (visitedToggle) {
+    visitedToggle.addEventListener('change', () => {
+        showVisitedPins = Boolean(saveToken && visitedToggle.checked);
+        refreshVisitedPins();
+    });
+}
+
+if (__SAVE_COMPONENT__) {
+    window.addEventListener('message', event => {
+        if (event.source !== window.parent || event.data?.type !== 'viaterra:state') return;
+
+        const {token, result, places} = event.data;
+        if (token !== saveToken && savePopup) savePopup.result = null;
+        if (token !== saveToken) {
+            saveRequest = null;
+            memoryRequest = null;
+            memoryPopup?.remove();
+            memoryPopup = null;
+        }
+        saveToken = token;
+        if (visitedToggle) {
+            visitedToggle.parentElement.hidden = !saveToken;
+            if (!saveToken) {
+                visitedToggle.checked = false;
+                showVisitedPins = false;
+            }
+        }
+        if (savedFinder) {
+            savedFinder.hidden = !saveToken;
+            if (!saveToken) {
+                savedFinder.open = false;
+                savedQuery.value = '';
+                savedResults.replaceChildren();
+            }
+        }
+        if (Array.isArray(places)) {
+            savedPlaces = places;
+            refreshVisitedPins();
+            if (savedFinder?.open && saveToken) renderSavedResults();
+        }
+
+        if (saveRequest && result?.id === saveRequest.id) {
+            saveRequest.popup.result = result;
+            if (result.status === 'saved' && saveRequest.popup === savePopup) {
+                searchMarker.getElement().style.visibility = 'hidden';
+            }
+            saveRequest = null;
+        }
+        if (memoryRequest && result?.id === memoryRequest.id) {
+            const {receive} = memoryRequest;
+            memoryRequest = null;
+            receive(result);
+        }
+        updateSavePopup();
+    });
+    window.parent.postMessage({type: 'viaterra:mapReady'}, '*');
+}
+
+if (locateButton && locationStatus) {
+    locateButton.addEventListener('click', () => {
+        if (!window.isSecureContext || !navigator.geolocation) {
+            locationStatus.textContent = 'Use HTTPS or localhost to access your location.';
+            return;
+        }
+
+        const sequence = ++searchSequence;
+        if (savedFinder) savedFinder.open = false;
+        searchResults.style.display = 'none';
+        locateButton.disabled = true;
+        locationStatus.textContent = 'Finding your location…';
+
+        navigator.geolocation.getCurrentPosition(({coords}) => {
+            locateButton.disabled = false;
+            if (sequence !== searchSequence) return;
+            locationStatus.textContent = '';
+            showSearchPlace({
+                geometry: {coordinates: [coords.longitude, coords.latitude]},
+                properties: {name: 'My location'}
+            }, true, coords.accuracy);
+        }, error => {
+            locateButton.disabled = false;
+            if (sequence !== searchSequence) return;
+            locationStatus.textContent = {
+                1: 'Allow location access in your browser or open Echoes directly.',
+                2: 'Your device could not find its location. Try again.',
+                3: 'Finding your location timed out. Try again.'
+            }[error.code] || 'Could not find your location. Try again.';
+        }, {enableHighAccuracy: true, timeout: 12000, maximumAge: 0});
+    });
+}
+
+if (searchInput && searchResults) {
+    searchInput.addEventListener('input', () => {
+        if (savedFinder) savedFinder.open = false;
+        searchSequence++;
+        searchResults.style.display = 'none';
+        if (locationStatus) locationStatus.textContent = '';
+    });
+    searchInput.addEventListener('keydown', async event => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+
+        const query = searchInput.value.trim();
+        if (query.length < 3) return;
+
+        const sequence = ++searchSequence;
+        if (locationStatus) locationStatus.textContent = '';
+        searchResults.replaceChildren();
+        searchResults.style.display = 'block';
+        const message = document.createElement('div');
+        message.style.padding = '12px';
+        message.textContent = 'Searching...';
+        searchResults.appendChild(message);
+
+        try {
+            const url = 'https://photon.komoot.io/api/?limit=5&q='
+                + encodeURIComponent(query);
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Search unavailable');
+            const data = await response.json();
+            if (sequence !== searchSequence) return;
+            const features = (data.features || []).filter(feature => {
+                const coords = feature.geometry?.coordinates;
+                return feature.geometry?.type === 'Point' && coords?.length >= 2
+                    && Number.isFinite(coords[0]) && Number.isFinite(coords[1])
+                    && Math.abs(coords[0]) <= 180 && Math.abs(coords[1]) <= 90
+                    && searchPlaceLabel(feature.properties || {});
+            });
+            searchResults.replaceChildren();
+            if (!features.length) {
+                message.textContent = 'No places found';
+                searchResults.appendChild(message);
+                return;
+            }
+
+            // Enter previews the best match, just as the user expects.
+            showSearchPlace(features[0]);
+            for (const feature of features) {
+                const label = searchPlaceLabel(feature.properties || {});
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = label;
+                button.addEventListener('click', () => showSearchPlace(feature, true));
+                searchResults.appendChild(button);
+            }
+        } catch (error) {
+            if (sequence !== searchSequence) return;
+            message.textContent = 'Search temporarily unavailable';
+            searchResults.replaceChildren(message);
+        }
+    });
+}
+
+/* Homepage stays fixed; functional pages allow zoom and pan. */
+if (__INTERACTIVE__) {
+    map.addControl(
+        new maplibregl.NavigationControl({showCompass: false}),
+        'top-right'
+    );
+} else {
+    map.scrollZoom.disable();
+    map.boxZoom.disable();
+    map.dragPan.disable();
+    map.dragRotate.disable();
+    map.doubleClickZoom.disable();
+    map.touchZoomRotate.disable();
+    map.keyboard.disable();
+}
+map.addControl(new maplibregl.AttributionControl({compact: true}), 'bottom-right');
+
+const error = document.getElementById('error');
+map.on('error', e => { if (!map.isStyleLoaded() && e.error) error.style.display = 'block'; });
+
+// Circular nautical marker: 40px SVG registered at pixelRatio 2 (20px before icon-size).
+// Each location remains an independent point, without clustering.
+
+const burgeeSvg = `<svg xmlns="http://www.w3.org/2000/svg"
+    width="40" height="40" viewBox="0 0 40 40">
+
+    <circle cx="20" cy="20" r="18"
+        fill="__MARKER_FILL__"
+        stroke="__MARKER_BORDER__"
+        stroke-width="3"/>
+
+    <path d="M15 11 V29"
+        fill="none"
+        stroke="__MARKER_FLAG__"
+        stroke-width="2.8"
+        stroke-linecap="round"/>
+
+    <path d="M17.5 12 L29 15.5 L17.5 20 Z"
+        fill="__MARKER_FLAG__"/>
+  </svg>`;
+
+
+
+/*
+ * VIATERRA — Organic watercolor sea
+ *
+ * Soft pigment variation rather than repeated wave marks.
+ * Uses the sea palette from config.toml.
+ * Texture is seamless and repeats without hard tile edges.
+ */
+function createSeaTexture() {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D unavailable');
+
+    const pixels = ctx.createImageData(size, size);
+
+    const clamp = (v, min = 0, max = 255) =>
+        Math.max(min, Math.min(max, v));
+
+    const rgb = hex => [
+        parseInt(hex.slice(1, 3), 16),
+        parseInt(hex.slice(3, 5), 16),
+        parseInt(hex.slice(5, 7), 16)
+    ];
+
+    const deep = rgb(SEA_CONFIG.deep_color);
+    const base = rgb(SEA_CONFIG.color);
+    const light = rgb(SEA_CONFIG.light_color);
+
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const smooth = t => t * t * (3 - 2 * t);
+
+    // Deterministic, tileable noise.
+    function hash(x, y) {
+        const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+        return n - Math.floor(n);
+    }
+
+    function noise(x, y, fx, fy) {
+        const px = x * fx / size;
+        const py = y * fy / size;
+
+        const ix = Math.floor(px);
+        const iy = Math.floor(py);
+
+        const sx = smooth(px - ix);
+        const sy = smooth(py - iy);
+
+        const sample = (dx, dy) => {
+            const nx = ((ix + dx) % fx + fx) % fx;
+            const ny = ((iy + dy) % fy + fy);
+            return hash(nx, ny);
+        };
+
+        const top = lerp(sample(0, 0), sample(1, 0), sx);
+        const bottom = lerp(sample(0, 1), sample(1, 1), sx);
+
+        return lerp(top, bottom, sy);
+    }
+
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+
+            // Gently distort the pigment shapes so they
+            // don't resemble a regular geometric pattern.
+            const warp = (
+                noise(x, y, 2, 2) - 0.5
+            ) * 28;
+
+            // Broad watercolor washes at multiple scales.
+            const broad =
+                (noise(x + warp, y, 3, 3) - 0.5) * 0.70 +
+                (noise(x, y + warp, 7, 5) - 0.5) * 0.30;
+
+            // Very fine irregular pigment variation.
+            const fine =
+                noise(x, y, 17, 13) - 0.5;
+
+            // Color variation: no bright repeated glints.
+
+            const tone = clamp(
+                0.5 +
+                broad * SEA_CONFIG.broad_strength / 7 +
+                fine * SEA_CONFIG.ripple_strength / 100,
+                0,
+                1
+            );
+
+
+            const from = tone < 0.5 ? deep : base;
+            const to = tone < 0.5 ? base : light;
+
+            const blend = tone < 0.5
+                ? tone * 2
+                : (tone - 0.5) * 2;
+
+            const i = (y * size + x) * 4;
+
+            for (let channel = 0; channel < 3; channel++) {
+                pixels.data[i + channel] = Math.round(
+                    lerp(from[channel], to[channel], blend)
+                );
+            }
+
+            pixels.data[i + 3] = 255;
+        }
+    }
+
+    return pixels;
+}
+
+
+// Overlay paints suppress the stock physical-atlas textures and draw our sea
+// and land as calm, solid nautical colors. Keep only restrained geographic labels.
+function applyMaritimeStyle() {
+  for (const layer of map.getStyle().layers || []) {
+    const id = (layer.id || '').toLowerCase();
+    const src = (layer['source-layer'] || '').toLowerCase();
+    try {
+      if (layer.type === 'background') {
+        map.setPaintProperty(layer.id, 'background-color', '#F3E9D5');
+
+        if (map.hasImage('viaterra-land-wash')) {
+            map.setPaintProperty(
+                layer.id,
+                'background-pattern',
+                'viaterra-land-wash'
+            );
+        }
+
+      } else if (layer.type === 'hillshade' || layer.type === 'raster' || layer.type === 'color-relief' || layer.type === 'fill-extrusion') {
+        map.setLayoutProperty(layer.id, 'visibility', 'none');
+      } else if (layer.type === 'fill') {
+        if (id.includes('water') || src === 'water') {
+          map.setPaintProperty(layer.id, 'fill-color', SEA_CONFIG.color);
+          if (map.hasImage('viaterra-sea-texture')) {
+            map.setPaintProperty(layer.id, 'fill-pattern', 'viaterra-sea-texture');
+          }
+          map.setPaintProperty(layer.id, 'fill-opacity', 1);
+        } else {
+          // Keep buildings discernible at street zoom in functional pages.
+          const isBuilding = /building/.test(id) || src.includes('building');
+          map.setPaintProperty(layer.id, 'fill-color',
+              __INTERACTIVE__ && isBuilding ? '#E4D9C3' : '#F3E9D5');
+          if (map.hasImage('viaterra-land-wash')) {
+            map.setPaintProperty(
+                layer.id,
+                'fill-pattern',
+                'viaterra-land-wash'
+            );
+        }
+          map.setPaintProperty(layer.id, 'fill-opacity', 1);
+        }
+      } else if (layer.type === 'line') {
+        if (id.includes('water') || src.includes('water')) {
+          map.setPaintProperty(layer.id, 'line-color', SEA_CONFIG.color);
+        } else if (/boundary|admin|border|coast/.test(id)) {
+          map.setPaintProperty(layer.id, 'line-color', '#BCA788');
+          map.setPaintProperty(layer.id, 'line-opacity', 0.65);
+        } else if (/road|street|highway|rail|bridge|tunnel/.test(id)) {
+          if (!__INTERACTIVE__) {
+            map.setLayoutProperty(layer.id, 'visibility', 'none');
+          } else {
+            map.setPaintProperty(layer.id, 'line-color', '#C8BDA9');
+            map.setPaintProperty(layer.id, 'line-opacity', 0.9);
+          }
+        } else {
+          map.setPaintProperty(layer.id, 'line-color', '#D4C4AA');
+          map.setPaintProperty(layer.id, 'line-opacity', 0.4);
+        }
+      } else if (layer.type === 'symbol') {
+        // Keep country and settlement labels, but not POIs, transit, roads or
+        // numerous sea labels. The visited-place flags must remain the focus.
+        const geographic = /country|state|city|town|village|settlement/.test(id);
+        if (!geographic && !__INTERACTIVE__) {
+          map.setLayoutProperty(layer.id, 'visibility', 'none');
+        } else {
+          map.setPaintProperty(layer.id, 'text-color', '#365E67');
+          map.setPaintProperty(layer.id, 'text-halo-color', '#F3E9D5');
+          map.setPaintProperty(layer.id, 'text-halo-width', 1);
+        }
+      }
+    } catch (e) { /* Tolerate style-specific layer differences. */ }
+  }
+}
+
+/* Warm, softly mottled watercolor wash for the land */
+function createLandTexture() {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D unavailable');
+
+    const image = ctx.createImageData(size, size);
+    const clamp = v => Math.max(0, Math.min(255, Math.round(v)));
+
+    // Repeatable noise with matching edges, so the wash tiles.
+    function hash(x, y) {
+        const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+        return n - Math.floor(n);
+    }
+
+    function noise(x, y, frequency) {
+        const px = x * frequency / size;
+        const py = y * frequency / size;
+
+        const ix = Math.floor(px);
+        const iy = Math.floor(py);
+
+        const fx = px - ix;
+        const fy = py - iy;
+
+        const sx = fx * fx * (3 - 2 * fx);
+        const sy = fy * fy * (3 - 2 * fy);
+
+        const sample = (dx, dy) => hash(
+            (ix + dx) % frequency,
+            (iy + dy) % frequency
+        );
+
+        const top = sample(0, 0) * (1 - sx) + sample(1, 0) * sx;
+        const bottom = sample(0, 1) * (1 - sx) + sample(1, 1) * sx;
+
+        return top * (1 - sy) + bottom * sy;
+    }
+
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+
+            // Broad pigment clouds, fine washes, paper grain.
+            const wash =
+                (noise(x, y, 4) - 0.5) * 36 +
+                (noise(x, y, 11) - 0.5) * 20 +
+                (noise(x, y, 27) - 0.5) * 8;
+
+            const grain = (hash(x + 73, y + 19) - 0.5) * 9;
+            const i = (y * size + x) * 4;
+
+            image.data[i]     = clamp(243 + wash * 0.7 + grain);
+            image.data[i + 1] = clamp(233 + wash * 0.95 + grain);
+            image.data[i + 2] = clamp(213 + wash * 1.1 + grain);
+            image.data[i + 3] = 255;
+        }
+    }
+
+    return image;
+}
+
+
+function memoryButton(label, action) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'atlas-save-button';
+    button.textContent = label;
+    button.addEventListener('click', action);
+    return button;
+}
+
+function requestMemory(payload, receive) {
+    if (!saveToken || memoryRequest || saveRequest) return false;
+    const id = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
+    memoryRequest = {id, receive};
+    updateSavePopup();
+    window.parent.postMessage({
+        type: 'viaterra:save',
+        request: {...payload, id, token: saveToken}
+    }, '*');
+    return true;
+}
+
+function showPlaceMemories(popup, placeKey, open) {
+    open.hidden = true;
+    const panel = document.createElement('div');
+    panel.className = 'atlas-memory-panel';
+    popup.appendChild(panel);
+    const status = document.createElement('div');
+    status.className = 'atlas-save-status';
+    status.setAttribute('role', 'status');
+
+    function load() {
+        panel.replaceChildren(status);
+        status.textContent = 'Loading memories…';
+        if (!requestMemory({action: 'read_memories', place_key: placeKey}, result => {
+            if (!panel.isConnected) return;
+            if (result.status !== 'memories') {
+                status.textContent = result.message;
+                panel.appendChild(memoryButton('Try again', load));
+                return;
+            }
+            renderNotes(result.memories);
+        })) {
+            status.textContent = 'Wait for the current action to finish.';
+            panel.appendChild(memoryButton('Try again', load));
+        }
+    }
+
+    function renderNotes(notes) {
+        panel.replaceChildren();
+        for (const note of notes) {
+            const item = document.createElement('details');
+            const title = document.createElement('summary');
+            title.textContent = note.title;
+            const story = document.createElement('p');
+            story.textContent = note.story;
+            item.append(title, story, memoryButton('Edit', () => edit(note, notes)));
+            panel.appendChild(item);
+        }
+        panel.appendChild(memoryButton('Add a memory', () => edit(null, notes)));
+    }
+
+    function edit(note, notes) {
+        const title = document.createElement('input');
+        title.type = 'text';
+        title.maxLength = 120;
+        title.placeholder = 'Title';
+        title.setAttribute('aria-label', 'Memory title');
+        title.value = note?.title || '';
+        const story = document.createElement('textarea');
+        story.maxLength = 4000;
+        story.rows = 4;
+        story.placeholder = 'What do you remember?';
+        story.setAttribute('aria-label', 'Memory note');
+        story.value = note?.story || '';
+        const cancel = memoryButton('Cancel', () => renderNotes(notes));
+        const save = memoryButton('Save memory', () => {
+            if (!title.value.trim()) {
+                status.textContent = 'Give this memory a title.';
+                title.focus();
+                return;
+            }
+            if (!requestMemory({
+                action: 'save_memory', place_key: placeKey, memory_id: note?.id ?? null,
+                title: title.value, story: story.value
+            }, result => {
+                if (!panel.isConnected) return;
+                if (result.status === 'memory_saved') {
+                    panel.replaceChildren(status);
+                    status.textContent = result.message;
+                    panel.appendChild(memoryButton('View memories', load));
+                    return;
+                }
+                save.disabled = cancel.disabled = title.disabled = story.disabled = false;
+                status.textContent = result.message;
+            })) {
+                status.textContent = 'Wait for the current action to finish.';
+                return;
+            }
+            save.disabled = cancel.disabled = title.disabled = story.disabled = true;
+            status.textContent = 'Saving…';
+        });
+        status.textContent = '';
+        panel.replaceChildren(title, story, save, cancel, status);
+        title.focus();
+    }
+
+    load();
+}
+
+function openVisitedPlace(place, coordinates, openMemories = false) {
+    const popup = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'place-name';
+    name.textContent = place.name || 'Visited place';
+    popup.appendChild(name);
+    if (place.country) {
+      const meta = document.createElement('div');
+      meta.className = 'place-meta';
+      meta.textContent = place.country;
+      popup.appendChild(meta);
+    }
+    const placeKey = place.placeKey;
+    let open;
+    if (saveToken && placeKey) {
+      open = memoryButton('Memories', () => {
+        showPlaceMemories(popup, placeKey, open);
+      });
+      popup.appendChild(open);
+    }
+    const visitedPopup = new maplibregl.Popup({offset: 13, maxWidth: saveToken ? '320px' : '260px'})
+      .setLngLat(coordinates).setDOMContent(popup).addTo(map);
+    if (saveToken && placeKey) {
+      memoryPopup?.remove();
+      memoryPopup = visitedPopup;
+      if (openMemories) showPlaceMemories(popup, placeKey, open);
+    }
+}
+
+function normalizePlaceSearch(value) {
+    return value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase();
+}
+
+function renderSavedResults() {
+    savedResults.replaceChildren();
+    if (!saveToken) return;
+    const terms = normalizePlaceSearch(savedQuery.value.trim()).split(/\s+/).filter(Boolean);
+    if (!terms.length) return;
+    const matching = savedPlaces.filter(place => {
+        const label = [place.name, place.city_name, place.country_name, place.country_code]
+            .filter(Boolean).join(' ');
+        return terms.every(term => normalizePlaceSearch(label).includes(term));
+    });
+    if (!matching.length) {
+        savedResults.textContent = 'No saved places match.';
+        return;
+    }
+    for (const place of matching.slice(0, 8)) {
+        const label = [...new Set([place.name, place.city_name, place.country_name]
+            .filter(Boolean))].join(' · ');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.addEventListener('click', () => {
+            if (!saveToken) return;
+            savedFinder.open = false;
+            searchResults.style.display = 'none';
+            searchSequence++;
+            const coordinates = [place.longitude, place.latitude];
+            map.jumpTo({center: coordinates, zoom: 16});
+            openVisitedPlace({
+                name: place.name,
+                country: place.country_name || place.country_code,
+                placeKey: place.place_key
+            }, coordinates, true);
+        });
+        savedResults.appendChild(button);
+    }
+    if (matching.length > 8) {
+        const more = document.createElement('div');
+        more.textContent = 'Refine your search to narrow the results.';
+        savedResults.appendChild(more);
+    }
+}
+
+if (savedFinder) {
+    savedQuery.addEventListener('input', renderSavedResults);
+    savedFinder.addEventListener('toggle', () => {
+        if (savedFinder.open) {
+            searchResults.style.display = 'none';
+            searchSequence++;
+            renderSavedResults();
+            savedQuery.focus();
+        }
+    });
+}
+
+function fitJourneyView(coordinates) {
+    if (!coordinates.length) return;
+    if (coordinates.length === 1) {
+        map.jumpTo({center: coordinates[0], zoom: 10});
+        return;
+    }
+    const bounds = new maplibregl.LngLatBounds(coordinates[0], coordinates[0]);
+    for (const coordinate of coordinates) bounds.extend(coordinate);
+    map.fitBounds(bounds, {padding: 50, maxZoom: 11, duration: 0});
+}
+
+let chooseJourneyPin;
+
+function selectJourneyStop(features) {
+    chooseJourneyPin(features);
+}
+
+function setupJourneyEditor() {
+    const byKey = new Map(journeyEditor.places.map(place => [place.place_key, place]));
+    const keys = [...journeyEditor.keys];
+    const history = [];
+    const title = document.getElementById('journey-title');
+    const country = document.getElementById('journey-country');
+    const undo = document.getElementById('journey-undo');
+    const save = document.getElementById('journey-save');
+    const cancel = document.getElementById('journey-cancel');
+    const status = document.getElementById('journey-status');
+    let pending = null;
+    let picker = null;
+    title.value = journeyEditor.title;
+
+    const countries = new Map();
+    for (const place of byKey.values()) {
+        if (place.country_code) countries.set(place.country_code, place.country || place.country_code);
+    }
+    country.add(new Option('Choose a country to show pins', ''));
+    for (const [code, name] of [...countries].sort((a, b) => a[1].localeCompare(b[1]))) {
+        country.add(new Option(name, code));
+    }
+    country.add(new Option('All saved pins', '*'));
+    country.value = countries.has(journeyEditor.country) ? journeyEditor.country : '';
+
+    function updateButtons() {
+        undo.disabled = Boolean(pending) || !history.length;
+        save.disabled = Boolean(pending) || !keys.length || !title.value.trim();
+        cancel.disabled = Boolean(pending);
+        title.disabled = country.disabled = Boolean(pending);
+    }
+
+    function refresh() {
+        const selected = new Set(keys);
+        const route = keys.map((key, i) => ({...byKey.get(key), stop_number: i + 1}))
+            .filter(place => place.latitude != null && place.longitude != null);
+        const candidates = [...byKey.values()].filter(place =>
+            !selected.has(place.place_key) && place.latitude != null && place.longitude != null
+            && (country.value === '*' || (country.value && place.country_code === country.value)));
+        geojson.features = placeFeatures([...candidates, ...route]);
+        map.getSource('visited-places').setData(geojson);
+        addJourneyRoute(route);
+        status.textContent = keys.length ? `${keys.length} ${keys.length === 1 ? 'stop' : 'stops'} · ${byKey.get(keys.at(-1)).name}` : '';
+        updateButtons();
+        return country.value ? [...byKey.values()].filter(place =>
+            place.latitude != null && place.longitude != null
+            && (country.value === '*' || place.country_code === country.value)) : [];
+    }
+
+    function toggle(key) {
+        if (pending || !byKey.has(key)) return;
+        history.push([...keys]);
+        const index = keys.indexOf(key);
+        if (index === -1) keys.push(key);
+        else keys.splice(index, 1);
+        picker?.remove();
+        refresh();
+    }
+
+    chooseJourneyPin = features => {
+        if (pending) return;
+        picker?.remove();
+        const unique = [...new Map(features.map(f => [f.properties.placeKey, f])).values()];
+        if (unique.length === 1) {
+            toggle(unique[0].properties.placeKey);
+            return;
+        }
+        const panel = document.createElement('div');
+        for (const f of unique) {
+            const button = document.createElement('button');
+            const key = f.properties.placeKey;
+            button.type = 'button';
+            button.className = 'journey-pin-button';
+            button.textContent = `${keys.includes(key) ? 'Remove' : 'Add'} ${f.properties.name}`;
+            button.addEventListener('click', () => toggle(key));
+            panel.appendChild(button);
+        }
+        picker = new maplibregl.Popup({offset: 13, maxWidth: '280px'})
+            .setLngLat(unique[0].geometry.coordinates).setDOMContent(panel).addTo(map);
+    };
+
+    function submit(action) {
+        if (pending) return;
+        pending = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
+        updateButtons();
+        window.parent.postMessage({
+            type: 'viaterra:save',
+            request: {id: pending, token: journeyEditor.token, action, title: title.value, keys: [...keys]}
+        }, '*');
+    }
+
+    title.addEventListener('input', updateButtons);
+    country.addEventListener('change', () => {
+        picker?.remove();
+        fitJourneyView(refresh().map(place => [place.longitude, place.latitude]));
+    });
+    undo.addEventListener('click', () => {
+        if (!history.length || pending) return;
+        keys.splice(0, keys.length, ...history.pop());
+        refresh();
+    });
+    save.addEventListener('click', () => submit('save_journey'));
+    cancel.addEventListener('click', () => submit('cancel'));
+    window.addEventListener('message', event => {
+        if (event.source !== window.parent || event.data?.type !== 'viaterra:state') return;
+        const result = event.data.result;
+        if (pending && result?.id === pending) {
+            pending = null;
+            status.textContent = result.message;
+            updateButtons();
+        }
+    });
+    const candidates = refresh();
+    const initial = candidates.length ? candidates : keys.map(key => byKey.get(key));
+    fitJourneyView(initial.filter(place => place.latitude != null && place.longitude != null)
+        .map(place => [place.longitude, place.latitude]));
+    window.parent.postMessage({type: 'viaterra:mapReady'}, '*');
+}
+
+
+function addJourneyRoute(stops, fit = false) {
+
+    // Keep the line continuous across the antimeridian.
+    const coordinates = [];
+    for (const point of stops) {
+        let longitude = point.longitude;
+        if (coordinates.length) {
+            const previous = coordinates.at(-1)[0];
+            longitude += 360 * Math.round((previous - longitude) / 360);
+        }
+        coordinates.push([longitude, point.latitude]);
+    }
+
+    const features = [];
+    for (let i = 1; i < stops.length; i++) {
+        if (stops[i].stop_number === stops[i - 1].stop_number + 1) {
+            features.push({
+                type: 'Feature', properties: {},
+                geometry: {type: 'LineString', coordinates: coordinates.slice(i - 1, i + 1)}
+            });
+        }
+    }
+    const data = {type: 'FeatureCollection', features};
+    const source = map.getSource('journey-route');
+    if (source) {
+        source.setData(data);
+        return;
+    }
+    map.addSource('journey-route', {type: 'geojson', data});
+    map.addLayer({
+        id: 'journey-route', type: 'line', source: 'journey-route',
+        layout: {'line-cap': 'round', 'line-join': 'round'},
+        paint: {'line-color': '#82475E', 'line-width': 3, 'line-opacity': 0.9, 'line-dasharray': [2, 2]}
+    });
+    if (fit) fitJourneyView(coordinates);
+}
+
+function addBurgeeLayer(flagImage, heartImage) {
+  map.addImage('viaterra-burgee', flagImage, {pixelRatio: 2});
+  if (heartImage) map.addImage('viaterra-heart', heartImage, {pixelRatio: 2});
+  // No clustering: each saved position remains its own feature.
+  map.addSource('visited-places', {type: 'geojson', data: geojson, cluster: false});
+  map.addLayer({
+    id: 'burgee-pins', type: 'symbol', source: 'visited-places',
+    layout: {
+      'icon-image': heartImage
+        ? ['case', ['boolean', ['get', 'hasMemory'], false], 'viaterra-heart', 'viaterra-burgee']
+        : 'viaterra-burgee',
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 1, 0.85, 5, 0.95, 10, 1.1, 15, 1.2],
+      'icon-anchor': 'center',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      'icon-rotation-alignment': 'viewport',
+      'icon-pitch-alignment': 'viewport'
+    }
+  });
+  if (JOURNEY) {
+    map.addLayer({
+      id: 'journey-stop-numbers', type: 'symbol', source: 'visited-places',
+      layout: {
+        'text-field': ['case', ['>', ['number', ['get', 'stopNumber'], 0], 0],
+            ['to-string', ['get', 'stopNumber']], ''],
+        'text-size': 15, 'text-offset': [0, 1.0],
+        'text-anchor': 'top', 'text-allow-overlap': true,
+      },
+      paint: {'text-color': '#61324A', 'text-halo-color': '#FFFCF5', 'text-halo-width': 1}
+    });
+  }
+  map.on('click', 'burgee-pins', e => {
+    if (!e.features?.length) return;
+    const f = e.features[0];
+    if (journeyEditor) {
+        selectJourneyStop(e.features);
+        return;
+    }
+    const place = {...f.properties};
+    if (JOURNEY) place.name = `${place.stopNumber}. ${place.name}`;
+    openVisitedPlace(place, f.geometry.coordinates);
+  });
+  map.on('mouseenter', 'burgee-pins', () => {map.getCanvas().style.cursor = 'pointer';});
+  map.on('mouseleave', 'burgee-pins', () => {map.getCanvas().style.cursor = '';});
+}
+
+map.on('load', () => {
+    error.style.display = 'none';
+
+    // -------------------------------------------------
+    // 1. Register the sea texture
+    // -------------------------------------------------
+    try {
+        map.addImage(
+            'viaterra-sea-texture',
+            createSeaTexture(),
+            { pixelRatio: 1 }
+        );
+    } catch (e) {
+        console.warn(
+            'Sea texture unavailable; retaining flat sea color.',
+            e
+        );
+    }
+
+    // -------------------------------------------------
+    // 2. Register the watercolor land texture
+    // -------------------------------------------------
+    try {
+        map.addImage(
+            'viaterra-land-wash',
+            createLandTexture(),
+            { pixelRatio: 1 }
+        );
+    } catch (e) {
+        console.warn(
+            'Land watercolor texture unavailable; retaining flat land color.',
+            e
+        );
+    }
+
+    // -------------------------------------------------
+    // 3. Apply maritime styling
+    // Both textures must be registered first.
+    // -------------------------------------------------
+    applyMaritimeStyle();
+    if (JOURNEY) addJourneyRoute(points, !journeyEditor);
+
+    // -------------------------------------------------
+    // 4. Load and display visited-place markers
+    // -------------------------------------------------
+    function loadMarker(svg) {
+        return new Promise((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => resolve(image);
+            image.onerror = reject;
+            image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        });
+    }
+
+    const markers = [loadMarker(burgeeSvg)];
+    if (MEMORIES_ONLY) {
+        markers.push(loadMarker(`<svg xmlns="http://www.w3.org/2000/svg"
+              width="40" height="40" viewBox="0 0 40 40">
+              <circle cx="20" cy="20" r="18" fill="#82475E" stroke="#FFFCF5" stroke-width="3"/>
+              <path d="${HEART_PATH}" fill="#FFFCF5"/>
+           </svg>`));
+    }
+    Promise.all(markers).then(([flag, heart]) => {
+        addBurgeeLayer(flag, heart);
+        if (journeyEditor) setupJourneyEditor();
+    }).catch(() => {
+        error.textContent = 'The map marker could not be loaded.';
+        error.style.display = 'block';
+    });
+});
+</script>
+</body>
+</html>
+"""
+
+_JOURNEY_CONTROLS = """
+<section class="atlas-search" id="journey-editor" aria-label="Journey editor">
+    <input id="journey-title" aria-label="Journey title" placeholder="Journey title" maxlength="120">
+    <select id="journey-country" aria-label="Show saved pins by country"></select>
+    <p>Click saved pins in travel order.</p>
+    <div class="journey-actions">
+        <button type="button" id="journey-undo">Undo</button>
+        <button type="button" id="journey-save">Save journey</button>
+        <button type="button" id="journey-cancel">Cancel</button>
+    </div>
+    <div id="journey-status" role="status"></div>
+</section>
+<style>
+#journey-editor {
+    width: min(330px, calc(100% - 85px));
+    padding: 10px;
+    border: 1px solid #D8CFBE;
+    border-radius: 8px;
+    background: #FFFCF5;
+    color: #254C60;
+    box-shadow: 0 3px 12px #1d384026;
+}
+#journey-editor input, #journey-editor select {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 5px;
+    border: 1px solid #D8CFBE;
+    border-radius: 6px;
+    background: #FFFCF5;
+    color: inherit;
+    font: inherit;
+}
+#journey-editor p { margin: 3px 0 7px; }
+.journey-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.journey-actions button, .journey-pin-button {
+    border: 1px solid #376E80;
+    border-radius: 6px;
+    padding: 6px 9px;
+    min-height: 36px;
+    font: inherit;
+    background: #FFFCF5;
+    color: #254C60;
+    cursor: pointer;
+}
+#journey-save { background: #254C60; color: #FFFCF5; }
+.journey-actions button:disabled { opacity: .45; cursor: default; }
+#journey-status:not(:empty) { margin-top: 6px; }
+.journey-pin-button { display: block; margin: 4px 0; text-align: left; }
+</style>
+"""
+
+
+def render_atlas_map(
+    *,
+    interactive: bool = False,
+    decorations: bool | None = None,
+    save_enabled: bool | None = None,
+    save_token: str | None = None,
+    save_result: dict | None = None,
+    recently_saved: list[dict] | None = None,
+    places_loader: Callable[[], list[dict]] | None = None,
+    memories_only: bool = False,
+    journey: bool = False,
+    journey_editor: dict | None = None,
+) -> dict | None:
+    """Render the nautical atlas, fixed on the homepage or navigable elsewhere.
+
+    The existing no-argument homepage call remains unchanged. Interactive maps
+    omit the homepage souvenirs by default. Echoes opts into the pin-saving
+    component by passing its owner authorization as save_enabled.
+    """
+    if decorations is None:
+        decorations = not interactive
+
+    # Application configuration
+    config = load_config()
+    map_config = config.get("map", {})
+    sea_config = map_config.get("sea", {})
+
+    marker_config = map_config.get("markers", {})
+
+    marker_settings = {
+        "fill": marker_config.get("fill", "#A67C43"),
+        "border": marker_config.get("border", "#FFFCF5"),
+        "flag": marker_config.get("flag", "#FFFFFF"),
+    }
+    map_height = int(map_config.get("height", 560))
+
+    map_position = {
+        "center": [
+            float(map_config.get("center_longitude", 13.0)),
+            float(map_config.get("center_latitude", 24.0)),
+        ],
+        "zoom": float(map_config.get("zoom", 1.25)),
+    }
+
+    sea_settings = {
+        "color": sea_config.get("color", "#69C7C8"),
+        "deep_color": sea_config.get("deep_color", "#4FAEB4"),
+        "light_color": sea_config.get("light_color", "#9EDDD8"),
+        "broad_strength": sea_config.get("broad_strength", 22.0),
+        "ripple_strength": sea_config.get("ripple_strength", 3.0),
+        "glint_red": sea_config.get("glint_red", 3.0),
+        "glint_green_blue": sea_config.get("glint_green_blue", 4.0),
+    }
+
+    # Load visited locations
+    try:
+        places = (places_loader or get_visited_places)()
+    except Exception:
+        st.error(
+            "Viaterra couldn't load visited places from Neon. "
+            "Check the database connection."
+        )
+        return
+
+    use_save_component = interactive and save_enabled is not None
+    if not places and not (use_save_component or journey):
+        st.info("No geolocated places are available in Neon yet.")
+        return
+
+    places = list(places or [])
+    if journey:
+        places = [
+            {**place, "stop_number": index}
+            for index, place in enumerate(places, start=1)
+            if place["latitude"] is not None and place["longitude"] is not None
+        ]
+    if use_save_component and recently_saved:
+        existing = {
+            (place["name"], float(place["latitude"]), float(place["longitude"]))
+            for place in places
+        }
+        for place in recently_saved:
+            identity = (place["name"], place["latitude"], place["longitude"])
+            if identity not in existing:
+                places.append(place)
+                existing.add(identity)
+
+    # Prepare location data
+    safe_json = json.dumps(
+        places,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+
+    safe_json = (
+        safe_json
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+
+
+    # -------------------------------------------------
+    # Decorative illustrations — configured in TOML
+    # -------------------------------------------------
+
+    def encode_image(*keys: str) -> str:
+        path = require_asset(*keys)
+        return base64.b64encode(path.read_bytes()).decode("ascii")
+
+    boat_base64 = encode_image(
+        "illustrations", "sailboat_vintage"
+    )
+
+    compass_base64 = encode_image(
+        "illustrations", "compass"
+    )
+
+    frame_config = map_config.get("frame", {})
+    frame_asset = frame_config.get("asset", "weathered_frame")
+    frame_width = int(frame_config.get("width", 18))
+    frame_opacity = float(frame_config.get("opacity", 1.0))
+    frame_slice_vertical = float(frame_config.get("slice_vertical", 14))
+    frame_slice_horizontal = float(frame_config.get("slice_horizontal", 10))
+
+    frame_base64 = encode_image(
+        "illustrations", frame_asset
+    )
+
+    # Decorative travel memorabilia
+    decoration_config = map_config.get("decorations", {})
+    decoration_html = []
+
+    if decorations and decoration_config.get("enabled", True):
+        for name, settings in decoration_config.items():
+            if name == "enabled" or not isinstance(settings, dict):
+                continue
+
+            asset = settings["asset"]
+            category = settings["category"]
+
+            image_base64 = encode_image(
+                "illustrations", "travel", category, asset
+            )
+
+            positioning = "; ".join(
+                f"{side}: {settings[side]}"
+                for side in ("top", "right", "bottom", "left")
+                if side in settings
+            )
+
+            width = float(settings.get("width", 120))
+            rotation = float(settings.get("rotation", 0))
+            opacity = float(settings.get("opacity", 1))
+
+            style = (
+                f"{positioning}; "
+                f"width: {width}px; "
+                f"transform: rotate({rotation}deg); "
+                f"opacity: {opacity};"
+            )
+
+            decoration_html.append(
+                '<img class="viaterra-decoration" '
+                f'src="data:image/png;base64,{image_base64}" '
+                f'style="{escape(style, quote=True)}" '
+                'alt="" aria-hidden="true">'
+            )
+
+
+        # Inject data and configuration into the map template
+    html = _MAP_HTML
+    search_control = """
+    <div class="atlas-search" id="atlas-search">
+        <div class="atlas-search-bar">
+            <input
+                id="atlas-search-input"
+                type="search"
+                placeholder="Search for a place..."
+                aria-label="Search for a place"
+                autocomplete="off"
+                enterkeyhint="search"
+            >
+            <button type="button" id="atlas-locate" class="atlas-locate"
+                    title="Use my location" aria-label="Use my location">
+                <svg width="20" height="20" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="7"/>
+                    <circle cx="12" cy="12" r="2.5"/>
+                    <path d="M12 2v3m0 14v3M2 12h3m14 0h3"/>
+                </svg>
+            </button>
+        </div>
+        <div id="atlas-location-status" class="atlas-location-status" role="status"></div>
+        <div id="atlas-search-results" class="atlas-search-results"></div>
+        __SAVED_FINDER__
+    </div>
+    """
+
+    html = html.replace(
+        "__SEARCH_CONTROL__",
+        search_control if interactive and not journey else "",
+    )
+
+    saved_finder = """
+        <label class="atlas-visited-toggle" hidden>
+            <input id="atlas-visited-toggle" type="checkbox" autocomplete="off">
+            Show visited pins
+        </label>
+        <details id="atlas-saved-finder" class="atlas-saved-finder" hidden>
+            <summary>Find a saved place</summary>
+            <input id="atlas-saved-query" type="search" aria-label="Find a saved place"
+                   placeholder="Place, city or country" autocomplete="off">
+            <div id="atlas-saved-results" class="atlas-search-results" aria-live="polite"></div>
+        </details>
+    """
+    html = html.replace("__SAVED_FINDER__", saved_finder if memories_only else "")
+    html = html.replace("__MEMORIES_ONLY__", json.dumps(memories_only))
+    editor_json = json.dumps(journey_editor).replace("<", "\\u003c")
+    html = html.replace("__JOURNEY__", json.dumps(journey))
+    html = html.replace("__JOURNEY_EDITOR__", editor_json)
+    html = html.replace("__JOURNEY_CONTROLS__", _JOURNEY_CONTROLS if journey_editor else "")
+    html = html.replace("__LEGEND_START__", '<div class="legend" hidden>' if memories_only or journey else '<div class="legend">')
+    html = html.replace(
+        "__MEMORY_LEGEND__",
+        '<div class="legend" id="atlas-memory-legend" role="status"></div>' if memories_only else
+        '<div class="legend">Lines connect stops in travel order</div>' if journey and len(places) > 1 else "",
+    )
+    html = html.replace("__SAVE_COMPONENT__", json.dumps(use_save_component))
+    html = html.replace("__INTERACTIVE__", json.dumps(interactive))
+    html = html.replace("__MAX_ZOOM__", "19" if interactive else "17")
+    html = html.replace(
+        "__INTERACTIVE_ORNAMENT_CSS__",
+        ".nautical-boat, .nautical-compass { display: none; }" if interactive else "",
+    )
+    html = html.replace("__COMPASS__", compass_base64)
+    html = html.replace("__PLACES__", safe_json)
+    html = html.replace("__SEA_SETTINGS__", json.dumps(sea_settings), )
+    html = html.replace("__SEA_COLOR__", sea_settings["color"],)
+    html = html.replace("__SAILBOAT__", boat_base64,)
+    html = html.replace("__MARKER_SETTINGS__", json.dumps(marker_settings),)
+    html = html.replace("__MARKER_FILL__", marker_settings["fill"])
+    html = html.replace("__MARKER_BORDER__", marker_settings["border"])
+    html = html.replace("__MARKER_FLAG__", marker_settings["flag"])
+    html = html.replace("__WEATHERED_FRAME__", frame_base64)
+    html = html.replace("__DECORATIONS__","\n".join(decoration_html),)
+    html = html.replace("__MAP_POSITION__",json.dumps(map_position),)
+    html = html.replace("__FRAME_WIDTH__", str(frame_width))
+    html = html.replace("__FRAME_OPACITY__", str(frame_opacity))
+    html = html.replace("__FRAME_SLICE_VERTICAL__", str(frame_slice_vertical))
+    html = html.replace("__FRAME_SLICE_HORIZONTAL__", str(frame_slice_horizontal))
+
+    if use_save_component or journey_editor:
+        atlas_component = components.declare_component(
+            "footprints_atlas" if journey_editor else "echoes_atlas",
+            path=str(Path(__file__).with_name("atlas_frontend")),
+        )
+        return atlas_component(
+            map_html=html,
+            height=map_height,
+            save_token=save_token if save_enabled else None,
+            save_result=save_result,
+            places=json.loads(safe_json),
+            key=f"footprints_{journey_editor['token']}" if journey_editor else "viaterra_echoes_atlas",
+        )
+
+    components.html(
+        html,
+        height=map_height,
+        scrolling=False,
+    )
