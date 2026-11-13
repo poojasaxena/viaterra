@@ -124,7 +124,6 @@ def handle_journey_action(request: object, draft: dict, places: dict[str, dict])
         not isinstance(title, str) or not title.strip() or len(title) > 120
         or not isinstance(keys, list) or not keys
         or any(not isinstance(key, str) or key not in places for key in keys)
-        or len(keys) != len(set(keys))
     ):
         draft["result"] = {"id": request_id, "message": "Enter a title and select saved stops."}
         st.rerun()

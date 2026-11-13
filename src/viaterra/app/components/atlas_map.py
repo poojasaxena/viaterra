@@ -547,7 +547,7 @@ function placeFeatures(places) {
         country: p.country_code || '',
         placeKey: p.place_key || '',
         hasMemory: p.has_memory === true,
-        stopNumber: JOURNEY ? p.stop_number : ''
+        stopNumbers: JOURNEY ? (p.stop_numbers || '') : ''
     },
     geometry: {type: 'Point', coordinates: [p.longitude, p.latitude]}
   }));
@@ -1357,8 +1357,8 @@ function fitJourneyView(coordinates) {
 
 let chooseJourneyPin;
 
-function selectJourneyStop(features) {
-    chooseJourneyPin(features);
+function selectJourneyStop(features, clickCount = 1) {
+    chooseJourneyPin(features, clickCount);
 }
 
 function setupJourneyEditor() {
@@ -1371,22 +1371,13 @@ function setupJourneyEditor() {
     const save = document.getElementById('journey-save');
     const cancel = document.getElementById('journey-cancel');
     const status = document.getElementById('journey-status');
-    let pending = null;
     const controls = document.getElementById('journey-controls');
     const chooser = document.getElementById('journey-pin-chooser');
     const choices = document.getElementById('journey-pin-choices');
     const back = document.getElementById('journey-pin-back');
-
-    function closeChooser() {
-        chooser.hidden = true;
-        controls.hidden = false;
-        choices.replaceChildren();
-    }
-
-    back.addEventListener('click', closeChooser);
-    chooser.addEventListener('keydown', event => {
-        if (event.key === 'Escape') closeChooser();
-    });
+    let pending = null;
+    let queuedPin = null;
+    map.doubleClickZoom.disable();
     title.value = journeyEditor.title;
 
     const countries = new Map();
@@ -1401,7 +1392,7 @@ function setupJourneyEditor() {
     country.value = countries.has(journeyEditor.country) ? journeyEditor.country : '';
 
     function updateButtons() {
-        undo.disabled = Boolean(pending) || !history.length;
+        undo.disabled = Boolean(pending) || (!history.length && !queuedPin);
         save.disabled = Boolean(pending) || !keys.length || !title.value.trim();
         cancel.disabled = Boolean(pending);
         title.disabled = country.disabled = Boolean(pending);
@@ -1414,7 +1405,7 @@ function setupJourneyEditor() {
         const candidates = [...byKey.values()].filter(place =>
             !selected.has(place.place_key) && place.latitude != null && place.longitude != null
             && (country.value === '*' || (country.value && place.country_code === country.value)));
-        geojson.features = placeFeatures([...candidates, ...route]);
+        geojson.features = placeFeatures([...candidates, ...journeyPins(route)]);
         map.getSource('visited-places').setData(geojson);
         addJourneyRoute(route);
         status.textContent = keys.length ? `${keys.length} ${keys.length === 1 ? 'stop' : 'stops'} · ${byKey.get(keys.at(-1)).name}` : '';
@@ -1424,32 +1415,71 @@ function setupJourneyEditor() {
             && (country.value === '*' || place.country_code === country.value)) : [];
     }
 
-    function toggle(key) {
+    function closeChooser() {
+        chooser.hidden = true;
+        controls.hidden = false;
+        choices.replaceChildren();
+    }
+
+    back.addEventListener('click', closeChooser);
+    chooser.addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeChooser();
+    });
+
+    function changeVisit(key, remove = false) {
         if (pending || !byKey.has(key)) return;
+        const index = keys.lastIndexOf(key);
+        if (remove && index === -1) return;
         history.push([...keys]);
-        const index = keys.indexOf(key);
-        if (index === -1) keys.push(key);
-        else keys.splice(index, 1);
+        if (remove) keys.splice(index, 1);
+        else keys.push(key);
         closeChooser();
         refresh();
     }
 
-    chooseJourneyPin = features => {
+    function flushPin() {
+        if (!queuedPin) return;
+        const {key, timer} = queuedPin;
+        clearTimeout(timer);
+        queuedPin = null;
+        changeVisit(key);
+    }
+
+    chooseJourneyPin = (features, clickCount) => {
         if (pending) return;
         closeChooser();
         const unique = [...new Map(features.map(f => [f.properties.placeKey, f])).values()];
         if (unique.length === 1) {
-            toggle(unique[0].properties.placeKey);
+            const key = unique[0].properties.placeKey;
+            if (clickCount > 1 && queuedPin?.key === key) {
+                clearTimeout(queuedPin.timer);
+                queuedPin = null;
+                changeVisit(key, true);
+            } else {
+                flushPin();
+                queuedPin = {key, timer: setTimeout(flushPin, 500)};
+                updateButtons();
+            }
             return;
         }
+        flushPin();
         for (const f of unique) {
             const button = document.createElement('button');
             const key = f.properties.placeKey;
             button.type = 'button';
             button.className = 'journey-pin-button';
-            button.textContent = `${keys.includes(key) ? 'Remove' : 'Add'} ${f.properties.name}`;
-            button.addEventListener('click', () => toggle(key));
+            const repeat = keys.includes(key);
+            button.textContent = `${repeat ? 'Return to' : 'Add'} ${f.properties.name}`;
+            button.addEventListener('click', () => changeVisit(key));
             choices.appendChild(button);
+            if (repeat) {
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'journey-pin-button';
+                remove.textContent = `Remove latest visit to ${f.properties.name}`;
+                remove.addEventListener('click', () => changeVisit(key, true));
+                choices.appendChild(remove);
+            }
         }
         controls.hidden = true;
         chooser.hidden = false;
@@ -1459,6 +1489,7 @@ function setupJourneyEditor() {
 
     function submit(action) {
         if (pending) return;
+        if (action === 'save_journey') flushPin();
         pending = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
         updateButtons();
         window.parent.postMessage({
@@ -1469,10 +1500,12 @@ function setupJourneyEditor() {
 
     title.addEventListener('input', updateButtons);
     country.addEventListener('change', () => {
+        flushPin();
         closeChooser();
         fitJourneyView(refresh().map(place => [place.longitude, place.latitude]));
     });
     undo.addEventListener('click', () => {
+        flushPin();
         if (!history.length || pending) return;
         keys.splice(0, keys.length, ...history.pop());
         refresh();
@@ -1495,6 +1528,16 @@ function setupJourneyEditor() {
     window.parent.postMessage({type: 'viaterra:mapReady'}, '*');
 }
 
+
+function journeyPins(stops) {
+    const pins = new Map();
+    for (const stop of stops) {
+        const pin = pins.get(stop.place_key);
+        if (pin) pin.stop_numbers += `, ${stop.stop_number}`;
+        else pins.set(stop.place_key, {...stop, stop_numbers: String(stop.stop_number)});
+    }
+    return [...pins.values()];
+}
 
 function addJourneyRoute(stops, fit = false) {
 
@@ -1556,8 +1599,7 @@ function addBurgeeLayer(flagImage, heartImage) {
     map.addLayer({
       id: 'journey-stop-numbers', type: 'symbol', source: 'visited-places',
       layout: {
-        'text-field': ['case', ['>', ['number', ['get', 'stopNumber'], 0], 0],
-            ['to-string', ['get', 'stopNumber']], ''],
+        'text-field': ['get', 'stopNumbers'],
         'text-size': 15, 'text-offset': [0, 1.0],
         'text-anchor': 'top', 'text-allow-overlap': true,
       },
@@ -1568,11 +1610,11 @@ function addBurgeeLayer(flagImage, heartImage) {
     if (!e.features?.length) return;
     const f = e.features[0];
     if (journeyEditor) {
-        selectJourneyStop(e.features);
+        selectJourneyStop(e.features, e.originalEvent?.detail);
         return;
     }
     const place = {...f.properties};
-    if (JOURNEY) place.name = `${place.stopNumber}. ${place.name}`;
+    if (JOURNEY && place.stopNumbers) place.name = `${place.stopNumbers}. ${place.name}`;
     openVisitedPlace(place, f.geometry.coordinates);
   });
   map.on('mouseenter', 'burgee-pins', () => {map.getCanvas().style.cursor = 'pointer';});
@@ -1584,7 +1626,6 @@ function addBurgeeLayer(flagImage, heartImage) {
         maxWidth: '240px', className: 'journey-pin-hint'
     });
     let hoveredPin = '';
-
     function hidePinHint() {
         hoveredPin = '';
         journeyPinHint.remove();
@@ -1596,20 +1637,17 @@ function addBurgeeLayer(flagImage, heartImage) {
         if (!pins.length) return;
 
         const pin = pins[0];
-        const {name, stopNumber, placeKey} = pin.properties;
-        const hintKey = JSON.stringify([placeKey, name, stopNumber, pins.length]);
+        const {name, stopNumbers, placeKey} = pin.properties;
+        const hintKey = JSON.stringify([placeKey, name, stopNumbers, pins.length]);
         if (hintKey === hoveredPin) return;
 
-        const label = stopNumber > 0 ? `Stop ${stopNumber}: ${name}` : name;
+        const label = stopNumbers ? `Stop ${stopNumbers}: ${name}` : name;
         const extra = pins.length > 1 ? ` (+${pins.length - 1} more)` : '';
         const [longitude, latitude] = pin.geometry.coordinates;
-        const wrappedLongitude = longitude
-            + 360 * Math.round((e.lngLat.lng - longitude) / 360);
-
+        const wrappedLongitude = longitude + 360 * Math.round((e.lngLat.lng - longitude) / 360);
         const content = document.createElement('div');
         content.textContent = label + extra;
-        journeyPinHint.setLngLat([wrappedLongitude, latitude])
-            .setDOMContent(content).addTo(map);
+        journeyPinHint.setLngLat([wrappedLongitude, latitude]).setDOMContent(content).addTo(map);
         hoveredPin = hintKey;
     });
     map.on('mouseleave', 'burgee-pins', hidePinHint);
@@ -1658,7 +1696,10 @@ map.on('load', () => {
     // Both textures must be registered first.
     // -------------------------------------------------
     applyMaritimeStyle();
-    if (JOURNEY) addJourneyRoute(points, !journeyEditor);
+    if (JOURNEY) {
+        addJourneyRoute(points, !journeyEditor);
+        geojson.features = placeFeatures(journeyPins(points));
+    }
 
     // -------------------------------------------------
     // 4. Load and display visited-place markers
@@ -1696,22 +1737,22 @@ map.on('load', () => {
 _JOURNEY_CONTROLS = """
 <section class="atlas-search" id="journey-editor" aria-label="Journey editor">
     <div id="journey-controls">
-    <input id="journey-title" aria-label="Journey title" placeholder="Journey title" maxlength="120">
-    <select id="journey-country" aria-label="Show saved pins by country"></select>
-    <p>Click saved pins in travel order.</p>
-    <div class="journey-actions">
-        <button type="button" id="journey-undo">Undo</button>
-        <button type="button" id="journey-save">Save journey</button>
-        <button type="button" id="journey-cancel">Cancel</button>
-    </div>
-    <div id="journey-status" role="status"></div>
+        <input id="journey-title" aria-label="Journey title" placeholder="Journey title" maxlength="120">
+        <select id="journey-country" aria-label="Show saved pins by country"></select>
+        <p>Click to add a visit. Double-click to remove its latest visit.</p>
+        <div class="journey-actions">
+            <button type="button" id="journey-undo">Undo</button>
+            <button type="button" id="journey-save">Save journey</button>
+            <button type="button" id="journey-cancel">Cancel</button>
+        </div>
+        <div id="journey-status" role="status"></div>
     </div>
     <div id="journey-pin-chooser" hidden>
-        <div class="journey-actions" style="align-items:center; justify-content:space-between">
+        <div class="journey-actions journey-chooser-heading">
             <strong>Choose a saved pin</strong>
             <button type="button" id="journey-pin-back">Back</button>
         </div>
-        <div id="journey-pin-choices"></div>
+        <div id="journey-pin-choices" aria-label="Overlapping saved pins"></div>
     </div>
 </section>
 <style>
@@ -1749,10 +1790,15 @@ _JOURNEY_CONTROLS = """
 #journey-save { background: #254C60; color: #FFFCF5; }
 .journey-actions button:disabled { opacity: .45; cursor: default; }
 #journey-status:not(:empty) { margin-top: 6px; }
-.journey-pin-hint { z-index: 21; overflow-wrap: anywhere; }
-.journey-pin-hint, .journey-pin-hint * { pointer-events: none; }
+.journey-pin-hint { z-index: 21; overflow-wrap: anywhere; } .journey-pin-hint, .journey-pin-hint * { pointer-events: none; }
 #journey-editor [hidden] { display: none; }
-#journey-pin-choices { max-height: min(260px, 45vh); overflow-y: auto; }
+.journey-chooser-heading { align-items: center; justify-content: space-between; }
+#journey-pin-choices {
+    max-height: min(260px, 45vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    margin-top: 4px;
+}
 .journey-pin-button {
     display: block;
     width: 100%;
@@ -1760,6 +1806,7 @@ _JOURNEY_CONTROLS = """
     text-align: left;
     overflow-wrap: anywhere;
 }
+.journey-pin-button:hover { background: #E2EEEB; }
 </style>
 """
 

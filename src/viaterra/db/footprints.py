@@ -43,8 +43,8 @@ def available_stops() -> dict[str, dict]:
 
 def save_journey(title: str, keys: list[str], journey_id: int | None = None) -> int:
     title = title.strip()
-    if not title or not keys or len(keys) != len(set(keys)):
-        raise ValueError("Enter a title and add at least one distinct saved place.")
+    if not title or not keys:
+        raise ValueError("Enter a title and add at least one saved place.")
 
     with connect() as conn:
         if journey_id is None:
