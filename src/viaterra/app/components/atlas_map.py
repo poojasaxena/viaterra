@@ -228,6 +228,29 @@ body {
     display: none;
 }
 
+.atlas-visited-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 5px;
+    width: fit-content;
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: #FFFCF5;
+    color: #254C60;
+    cursor: pointer;
+    box-shadow: 0 3px 12px rgba(29, 56, 64, 0.15);
+}
+
+.atlas-visited-toggle[hidden] {
+    display: none;
+}
+
+.atlas-visited-toggle input {
+    margin: 0;
+    accent-color: #82475E;
+}
+
 .atlas-saved-finder {
     margin-top: 5px;
     width: fit-content;
@@ -497,6 +520,7 @@ const points = __PLACES__;
 const MEMORIES_ONLY = __MEMORIES_ONLY__;
 const HEART_PATH = 'M20 30 10.5 20.4C3.5 13.4 13.4 6 20 13.5C26.6 6 36.5 13.4 29.5 20.4Z';
 let savedPlaces = points;
+let showVisitedPins = false;
 
 const SEA_CONFIG = __SEA_SETTINGS__;
 
@@ -512,13 +536,14 @@ const geojson = {
 };
 
 function placeFeatures(places) {
-  const visible = MEMORIES_ONLY ? places.filter(p => p.has_memory) : places;
+  const visible = MEMORIES_ONLY && !showVisitedPins ? places.filter(p => p.has_memory) : places;
   return visible.map((p, i) => ({
     type: 'Feature', id: i,
     properties: {
         name: p.name,
         country: p.country_code || '',
-        placeKey: p.place_key || ''
+        placeKey: p.place_key || '',
+        hasMemory: p.has_memory === true
     },
     geometry: {type: 'Point', coordinates: [p.longitude, p.latitude]}
   }));
@@ -546,6 +571,7 @@ const savedFinder = document.getElementById('atlas-saved-finder');
 const savedQuery = document.getElementById('atlas-saved-query');
 const savedResults = document.getElementById('atlas-saved-results');
 const memoryLegend = document.getElementById('atlas-memory-legend');
+const visitedToggle = document.getElementById('atlas-visited-toggle');
 let searchMarker = null;
 let saveToken = null;
 let savePopup = null;
@@ -659,6 +685,24 @@ function showSearchPlace(feature, closeResults = false, accuracy = null) {
     }
 }
 
+function refreshVisitedPins() {
+    geojson.features = placeFeatures(savedPlaces);
+    map.getSource('visited-places')?.setData(geojson);
+    if (memoryLegend) {
+        memoryLegend.textContent = !saveToken ? 'Unlock editing to view memories'
+            : showVisitedPins ? 'Hearts: memories · Flags: other visited places'
+            : geojson.features.length ? 'Places with memories'
+            : 'Find a saved place to add your first memory';
+    }
+}
+
+if (visitedToggle) {
+    visitedToggle.addEventListener('change', () => {
+        showVisitedPins = Boolean(saveToken && visitedToggle.checked);
+        refreshVisitedPins();
+    });
+}
+
 if (__SAVE_COMPONENT__) {
     window.addEventListener('message', event => {
         if (event.source !== window.parent || event.data?.type !== 'viaterra:state') return;
@@ -672,6 +716,13 @@ if (__SAVE_COMPONENT__) {
             memoryPopup = null;
         }
         saveToken = token;
+        if (visitedToggle) {
+            visitedToggle.parentElement.hidden = !saveToken;
+            if (!saveToken) {
+                visitedToggle.checked = false;
+                showVisitedPins = false;
+            }
+        }
         if (savedFinder) {
             savedFinder.hidden = !saveToken;
             if (!saveToken) {
@@ -682,13 +733,7 @@ if (__SAVE_COMPONENT__) {
         }
         if (Array.isArray(places)) {
             savedPlaces = places;
-            geojson.features = placeFeatures(places);
-            map.getSource('visited-places')?.setData(geojson);
-            if (memoryLegend) {
-                memoryLegend.textContent = !saveToken ? 'Unlock editing to view memories'
-                    : geojson.features.length ? 'Places with memories'
-                    : 'Find a saved place to add your first memory';
-            }
+            refreshVisitedPins();
             if (savedFinder?.open && saveToken) renderSavedResults();
         }
 
@@ -1295,14 +1340,17 @@ if (savedFinder) {
     });
 }
 
-function addBurgeeLayer(image) {
-  map.addImage('viaterra-burgee', image, {pixelRatio: 2});
+function addBurgeeLayer(flagImage, heartImage) {
+  map.addImage('viaterra-burgee', flagImage, {pixelRatio: 2});
+  if (heartImage) map.addImage('viaterra-heart', heartImage, {pixelRatio: 2});
   // No clustering: each saved position remains its own feature.
   map.addSource('visited-places', {type: 'geojson', data: geojson, cluster: false});
   map.addLayer({
     id: 'burgee-pins', type: 'symbol', source: 'visited-places',
     layout: {
-      'icon-image': 'viaterra-burgee',
+      'icon-image': heartImage
+        ? ['case', ['boolean', ['get', 'hasMemory'], false], 'viaterra-heart', 'viaterra-burgee']
+        : 'viaterra-burgee',
       'icon-size': ['interpolate', ['linear'], ['zoom'], 1, 0.85, 5, 0.95, 10, 1.1, 15, 1.2],
       'icon-anchor': 'center',
       'icon-allow-overlap': true,
@@ -1364,26 +1412,27 @@ map.on('load', () => {
     // -------------------------------------------------
     // 4. Load and display visited-place markers
     // -------------------------------------------------
-    const image = new Image();
+    function loadMarker(svg) {
+        return new Promise((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => resolve(image);
+            image.onerror = reject;
+            image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        });
+    }
 
-    image.onload = () => {
-        addBurgeeLayer(image);
-    };
-
-    image.onerror = () => {
-        error.textContent = 'The map marker could not be loaded.';
-        error.style.display = 'block';
-    };
-
-    const markerSvg = MEMORIES_ONLY
-        ? `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    const markers = [loadMarker(burgeeSvg)];
+    if (MEMORIES_ONLY) {
+        markers.push(loadMarker(`<svg xmlns="http://www.w3.org/2000/svg"
+              width="40" height="40" viewBox="0 0 40 40">
               <circle cx="20" cy="20" r="18" fill="#82475E" stroke="#FFFCF5" stroke-width="3"/>
               <path d="${HEART_PATH}" fill="#FFFCF5"/>
-           </svg>`
-        : burgeeSvg;
-    image.src =
-        'data:image/svg+xml;charset=utf-8,'
-        + encodeURIComponent(markerSvg);
+           </svg>`));
+    }
+    Promise.all(markers).then(([flag, heart]) => addBurgeeLayer(flag, heart)).catch(() => {
+        error.textContent = 'The map marker could not be loaded.';
+        error.style.display = 'block';
+    });
 });
 </script>
 </body>
@@ -1588,6 +1637,10 @@ def render_atlas_map(
     )
 
     saved_finder = """
+        <label class="atlas-visited-toggle" hidden>
+            <input id="atlas-visited-toggle" type="checkbox" autocomplete="off">
+            Show visited pins
+        </label>
         <details id="atlas-saved-finder" class="atlas-saved-finder" hidden>
             <summary>Find a saved place</summary>
             <input id="atlas-saved-query" type="search" aria-label="Find a saved place"
