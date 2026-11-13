@@ -1577,6 +1577,45 @@ function addBurgeeLayer(flagImage, heartImage) {
   });
   map.on('mouseenter', 'burgee-pins', () => {map.getCanvas().style.cursor = 'pointer';});
   map.on('mouseleave', 'burgee-pins', () => {map.getCanvas().style.cursor = '';});
+
+  if (journeyEditor) {
+    const journeyPinHint = new maplibregl.Popup({
+        closeButton: false, closeOnClick: false, offset: 16,
+        maxWidth: '240px', className: 'journey-pin-hint'
+    });
+    let hoveredPin = '';
+
+    function hidePinHint() {
+        hoveredPin = '';
+        journeyPinHint.remove();
+    }
+
+    map.on('mousemove', 'burgee-pins', e => {
+        const pins = [...new Map((e.features || []).map(pin =>
+            [pin.properties.placeKey, pin])).values()];
+        if (!pins.length) return;
+
+        const pin = pins[0];
+        const {name, stopNumber, placeKey} = pin.properties;
+        const hintKey = JSON.stringify([placeKey, name, stopNumber, pins.length]);
+        if (hintKey === hoveredPin) return;
+
+        const label = stopNumber > 0 ? `Stop ${stopNumber}: ${name}` : name;
+        const extra = pins.length > 1 ? ` (+${pins.length - 1} more)` : '';
+        const [longitude, latitude] = pin.geometry.coordinates;
+        const wrappedLongitude = longitude
+            + 360 * Math.round((e.lngLat.lng - longitude) / 360);
+
+        const content = document.createElement('div');
+        content.textContent = label + extra;
+        journeyPinHint.setLngLat([wrappedLongitude, latitude])
+            .setDOMContent(content).addTo(map);
+        hoveredPin = hintKey;
+    });
+    map.on('mouseleave', 'burgee-pins', hidePinHint);
+    map.on('click', 'burgee-pins', hidePinHint);
+    map.on('movestart', hidePinHint);
+  }
 }
 
 map.on('load', () => {
@@ -1710,6 +1749,8 @@ _JOURNEY_CONTROLS = """
 #journey-save { background: #254C60; color: #FFFCF5; }
 .journey-actions button:disabled { opacity: .45; cursor: default; }
 #journey-status:not(:empty) { margin-top: 6px; }
+.journey-pin-hint { z-index: 21; overflow-wrap: anywhere; }
+.journey-pin-hint, .journey-pin-hint * { pointer-events: none; }
 #journey-editor [hidden] { display: none; }
 #journey-pin-choices { max-height: min(260px, 45vh); overflow-y: auto; }
 .journey-pin-button {
