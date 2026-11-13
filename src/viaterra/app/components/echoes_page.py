@@ -222,7 +222,8 @@ def render_echoes() -> None:
         save_enabled=authorized,
         save_token=st.session_state.get(_SAVE_TOKEN),
         save_result=st.session_state.get(_RESULT) if authorized else None,
-        places_loader=get_echoes_places,
+        places_loader=get_echoes_places if authorized else list,
+        memories_only=True,
     )
     if request is not None:
         save_selected_place(request, authorized=authorized)

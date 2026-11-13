@@ -223,6 +223,46 @@ body {
     gap: 5px;
 }
 
+.legend[hidden],
+#atlas-memory-legend:empty {
+    display: none;
+}
+
+.atlas-saved-finder {
+    margin-top: 5px;
+    width: fit-content;
+    max-width: 100%;
+    border-radius: 8px;
+    background: #FFFCF5;
+    color: #254C60;
+    box-shadow: 0 3px 12px rgba(29, 56, 64, 0.15);
+}
+
+.atlas-saved-finder[open] {
+    width: 100%;
+}
+
+.atlas-saved-finder summary {
+    padding: 9px 12px;
+    cursor: pointer;
+}
+
+.atlas-saved-finder input {
+    width: calc(100% - 16px);
+    margin: 0 8px;
+    padding: 8px;
+    font: inherit;
+    color: inherit;
+    border: 1px solid #D8CFBE;
+    border-radius: 6px;
+}
+
+.atlas-saved-finder .atlas-search-results:not(:empty) {
+    display: block;
+    padding: 4px;
+    box-shadow: none;
+}
+
 .atlas-locate {
     flex: 0 0 44px;
     min-height: 44px;
@@ -437,8 +477,7 @@ __INTERACTIVE_ORNAMENT_CSS__
 __DECORATIONS__
 
 
-    <!-- This marker key is intentionally positioned at bottom-right via .legend. -->
-    <div class="legend">
+    __LEGEND_START__
         <svg viewBox="0 0 40 40" aria-hidden="true">
             <circle cx="20" cy="20" r="18"
                     fill="__MARKER_FILL__" stroke="__MARKER_BORDER__" stroke-width="3" />
@@ -448,12 +487,16 @@ __DECORATIONS__
         </svg>
         Where I Have Wandered
     </div>
+    __MEMORY_LEGEND__
   <div id="error" class="error">The map couldn't load its base tiles. Check internet access and the browser console.</div>
 </div>
 <script type="module">
 import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs';
 
 const points = __PLACES__;
+const MEMORIES_ONLY = __MEMORIES_ONLY__;
+const HEART_PATH = 'M20 30 10.5 20.4C3.5 13.4 13.4 6 20 13.5C26.6 6 36.5 13.4 29.5 20.4Z';
+let savedPlaces = points;
 
 const SEA_CONFIG = __SEA_SETTINGS__;
 
@@ -469,7 +512,8 @@ const geojson = {
 };
 
 function placeFeatures(places) {
-  return places.map((p, i) => ({
+  const visible = MEMORIES_ONLY ? places.filter(p => p.has_memory) : places;
+  return visible.map((p, i) => ({
     type: 'Feature', id: i,
     properties: {
         name: p.name,
@@ -498,6 +542,10 @@ const searchInput = document.getElementById('atlas-search-input');
 const searchResults = document.getElementById('atlas-search-results');
 const locateButton = document.getElementById('atlas-locate');
 const locationStatus = document.getElementById('atlas-location-status');
+const savedFinder = document.getElementById('atlas-saved-finder');
+const savedQuery = document.getElementById('atlas-saved-query');
+const savedResults = document.getElementById('atlas-saved-results');
+const memoryLegend = document.getElementById('atlas-memory-legend');
 let searchMarker = null;
 let saveToken = null;
 let savePopup = null;
@@ -624,9 +672,24 @@ if (__SAVE_COMPONENT__) {
             memoryPopup = null;
         }
         saveToken = token;
+        if (savedFinder) {
+            savedFinder.hidden = !saveToken;
+            if (!saveToken) {
+                savedFinder.open = false;
+                savedQuery.value = '';
+                savedResults.replaceChildren();
+            }
+        }
         if (Array.isArray(places)) {
+            savedPlaces = places;
             geojson.features = placeFeatures(places);
             map.getSource('visited-places')?.setData(geojson);
+            if (memoryLegend) {
+                memoryLegend.textContent = !saveToken ? 'Unlock editing to view memories'
+                    : geojson.features.length ? 'Places with memories'
+                    : 'Find a saved place to add your first memory';
+            }
+            if (savedFinder?.open && saveToken) renderSavedResults();
         }
 
         if (saveRequest && result?.id === saveRequest.id) {
@@ -654,6 +717,7 @@ if (locateButton && locationStatus) {
         }
 
         const sequence = ++searchSequence;
+        if (savedFinder) savedFinder.open = false;
         searchResults.style.display = 'none';
         locateButton.disabled = true;
         locationStatus.textContent = 'Finding your location…';
@@ -680,6 +744,7 @@ if (locateButton && locationStatus) {
 
 if (searchInput && searchResults) {
     searchInput.addEventListener('input', () => {
+        if (savedFinder) savedFinder.open = false;
         searchSequence++;
         searchResults.style.display = 'none';
         if (locationStatus) locationStatus.textContent = '';
@@ -1143,6 +1208,93 @@ function showPlaceMemories(popup, placeKey, open) {
     load();
 }
 
+function openVisitedPlace(place, coordinates, openMemories = false) {
+    const popup = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'place-name';
+    name.textContent = place.name || 'Visited place';
+    popup.appendChild(name);
+    if (place.country) {
+      const meta = document.createElement('div');
+      meta.className = 'place-meta';
+      meta.textContent = place.country;
+      popup.appendChild(meta);
+    }
+    const placeKey = place.placeKey;
+    let open;
+    if (saveToken && placeKey) {
+      open = memoryButton('Memories', () => {
+        showPlaceMemories(popup, placeKey, open);
+      });
+      popup.appendChild(open);
+    }
+    const visitedPopup = new maplibregl.Popup({offset: 13, maxWidth: saveToken ? '320px' : '260px'})
+      .setLngLat(coordinates).setDOMContent(popup).addTo(map);
+    if (saveToken && placeKey) {
+      memoryPopup?.remove();
+      memoryPopup = visitedPopup;
+      if (openMemories) showPlaceMemories(popup, placeKey, open);
+    }
+}
+
+function normalizePlaceSearch(value) {
+    return value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase();
+}
+
+function renderSavedResults() {
+    savedResults.replaceChildren();
+    if (!saveToken) return;
+    const terms = normalizePlaceSearch(savedQuery.value.trim()).split(/\s+/).filter(Boolean);
+    if (!terms.length) return;
+    const matching = savedPlaces.filter(place => {
+        const label = [place.name, place.city_name, place.country_name, place.country_code]
+            .filter(Boolean).join(' ');
+        return terms.every(term => normalizePlaceSearch(label).includes(term));
+    });
+    if (!matching.length) {
+        savedResults.textContent = 'No saved places match.';
+        return;
+    }
+    for (const place of matching.slice(0, 8)) {
+        const label = [...new Set([place.name, place.city_name, place.country_name]
+            .filter(Boolean))].join(' · ');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.addEventListener('click', () => {
+            if (!saveToken) return;
+            savedFinder.open = false;
+            searchResults.style.display = 'none';
+            searchSequence++;
+            const coordinates = [place.longitude, place.latitude];
+            map.jumpTo({center: coordinates, zoom: 16});
+            openVisitedPlace({
+                name: place.name,
+                country: place.country_name || place.country_code,
+                placeKey: place.place_key
+            }, coordinates, true);
+        });
+        savedResults.appendChild(button);
+    }
+    if (matching.length > 8) {
+        const more = document.createElement('div');
+        more.textContent = 'Refine your search to narrow the results.';
+        savedResults.appendChild(more);
+    }
+}
+
+if (savedFinder) {
+    savedQuery.addEventListener('input', renderSavedResults);
+    savedFinder.addEventListener('toggle', () => {
+        if (savedFinder.open) {
+            searchResults.style.display = 'none';
+            searchSequence++;
+            renderSavedResults();
+            savedQuery.focus();
+        }
+    });
+}
+
 function addBurgeeLayer(image) {
   map.addImage('viaterra-burgee', image, {pixelRatio: 2});
   // No clustering: each saved position remains its own feature.
@@ -1162,30 +1314,7 @@ function addBurgeeLayer(image) {
   map.on('click', 'burgee-pins', e => {
     if (!e.features?.length) return;
     const f = e.features[0];
-    const popup = document.createElement('div');
-    const name = document.createElement('div');
-    name.className = 'place-name';
-    name.textContent = f.properties.name || 'Visited place';
-    popup.appendChild(name);
-    if (f.properties.country) {
-      const meta = document.createElement('div');
-      meta.className = 'place-meta';
-      meta.textContent = f.properties.country;
-      popup.appendChild(meta);
-    }
-    const placeKey = f.properties.placeKey;
-    if (saveToken && placeKey) {
-      const open = memoryButton('Memories', () => {
-        showPlaceMemories(popup, placeKey, open);
-      });
-      popup.appendChild(open);
-    }
-    const visitedPopup = new maplibregl.Popup({offset: 13, maxWidth: saveToken ? '320px' : '260px'})
-      .setLngLat(f.geometry.coordinates).setDOMContent(popup).addTo(map);
-    if (saveToken && placeKey) {
-      memoryPopup?.remove();
-      memoryPopup = visitedPopup;
-    }
+    openVisitedPlace(f.properties, f.geometry.coordinates);
   });
   map.on('mouseenter', 'burgee-pins', () => {map.getCanvas().style.cursor = 'pointer';});
   map.on('mouseleave', 'burgee-pins', () => {map.getCanvas().style.cursor = '';});
@@ -1246,9 +1375,15 @@ map.on('load', () => {
         error.style.display = 'block';
     };
 
+    const markerSvg = MEMORIES_ONLY
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+              <circle cx="20" cy="20" r="18" fill="#82475E" stroke="#FFFCF5" stroke-width="3"/>
+              <path d="${HEART_PATH}" fill="#FFFCF5"/>
+           </svg>`
+        : burgeeSvg;
     image.src =
         'data:image/svg+xml;charset=utf-8,'
-        + encodeURIComponent(burgeeSvg);
+        + encodeURIComponent(markerSvg);
 });
 </script>
 </body>
@@ -1264,6 +1399,7 @@ def render_atlas_map(
     save_result: dict | None = None,
     recently_saved: list[dict] | None = None,
     places_loader: Callable[[], list[dict]] | None = None,
+    memories_only: bool = False,
 ) -> dict | None:
     """Render the nautical atlas, fixed on the homepage or navigable elsewhere.
 
@@ -1442,6 +1578,7 @@ def render_atlas_map(
         </div>
         <div id="atlas-location-status" class="atlas-location-status" role="status"></div>
         <div id="atlas-search-results" class="atlas-search-results"></div>
+        __SAVED_FINDER__
     </div>
     """
 
@@ -1450,6 +1587,21 @@ def render_atlas_map(
         search_control if interactive else "",
     )
 
+    saved_finder = """
+        <details id="atlas-saved-finder" class="atlas-saved-finder" hidden>
+            <summary>Find a saved place</summary>
+            <input id="atlas-saved-query" type="search" aria-label="Find a saved place"
+                   placeholder="Place, city or country" autocomplete="off">
+            <div id="atlas-saved-results" class="atlas-search-results" aria-live="polite"></div>
+        </details>
+    """
+    html = html.replace("__SAVED_FINDER__", saved_finder if memories_only else "")
+    html = html.replace("__MEMORIES_ONLY__", json.dumps(memories_only))
+    html = html.replace("__LEGEND_START__", '<div class="legend" hidden>' if memories_only else '<div class="legend">')
+    html = html.replace(
+        "__MEMORY_LEGEND__",
+        '<div class="legend" id="atlas-memory-legend" role="status"></div>' if memories_only else "",
+    )
     html = html.replace("__SAVE_COMPONENT__", json.dumps(use_save_component))
     html = html.replace("__INTERACTIVE__", json.dumps(interactive))
     html = html.replace("__MAX_ZOOM__", "19" if interactive else "17")
