@@ -7,9 +7,11 @@ import secrets
 import streamlit as st
 
 from viaterra.app.components.atlas_map import render_atlas_map
-from viaterra.app.components.echoes_page import owner_password
+from viaterra.app.components.echoes_page import owner_password, selected_place
 from viaterra.app.navigation import render_navigation
 from viaterra.app.ui import render_header
+from viaterra.db.capture import find_nearby, insert_visited_place
+from viaterra.db.queries import get_visited_places
 from viaterra.db.footprints import available_stops, journey_stops, list_journeys, save_journey
 
 _LOGGER = logging.getLogger(__name__)
@@ -116,6 +118,10 @@ def handle_journey_action(request: object, draft: dict, places: dict[str, dict])
         st.session_state.pop(_DRAFT, None)
         st.rerun()
         return
+    if request.get("action") == "pick_place":
+        draft["result"] = pick_journey_place(request, draft, places)
+        st.rerun()
+        return
     if request.get("action") != "save_journey":
         return
 
@@ -138,3 +144,63 @@ def handle_journey_action(request: object, draft: dict, places: dict[str, dict])
         st.session_state[_SELECT_SAVED] = journey_id
         st.session_state.pop(_DRAFT, None)
     st.rerun()
+
+
+def pick_journey_place(request: dict, draft: dict, places: dict[str, dict]) -> dict:
+    """Reuse a nearby saved pin or capture the selected search result."""
+    result = {"id": request["id"]}
+    try:
+        place = selected_place(request.get("place"))
+    except ValueError as exc:
+        return {**result, "message": str(exc)}
+
+    confirmation = draft.pop("place_confirmation", None)
+    try:
+        latitude, longitude = place["latitude"], place["longitude"]
+        nearby = list(find_nearby(latitude, longitude))
+        nearby_ids = {key for key, _, _ in nearby}
+        reuse_key = request.get("reuse_key")
+        confirmed = (
+            confirmation is not None
+            and request.get("confirm") == confirmation["id"]
+            and place == confirmation["place"]
+        )
+        if isinstance(reuse_key, str):
+            if confirmed and reuse_key in nearby_ids and reuse_key in places:
+                return {**result, "picked_place": places[reuse_key]}
+            return {**result, "message": "That saved pin is unavailable. Search again."}
+
+        if nearby and not (confirmed and nearby_ids <= confirmation["keys"]):
+            options = [
+                {"key": key, "name": name, "distance": distance}
+                for key, name, distance in nearby if key in places
+            ]
+            draft["place_confirmation"] = {
+                "id": request["id"], "place": place, "keys": nearby_ids,
+            }
+            return {**result, "nearby": options}
+
+        created = insert_visited_place(
+            name=place["name"], latitude=latitude, longitude=longitude,
+            country_alpha2=place["country_alpha2"], country_name=place["country"],
+        )
+        clear_cache = getattr(get_visited_places, "clear", None)
+        if callable(clear_cache):
+            clear_cache()
+        updated = available_stops()
+        if isinstance(created, str) and created in updated and created not in places:
+            return {**result, "picked_place": updated[created]}
+
+        # Older capture helpers may return no key. Match the new row by place and position.
+        matches = [
+            item for key, item in updated.items()
+            if key not in places and item["name"] == place["name"]
+            and abs(item["latitude"] - latitude) < 0.000001
+            and abs(item["longitude"] - longitude) < 0.000001
+        ]
+        if len(matches) == 1:
+            return {**result, "picked_place": matches[0]}
+        return {**result, "message": "Pin saved. Search again to select it from nearby pins."}
+    except Exception:
+        _LOGGER.exception("Could not pick a place for the journey")
+        return {**result, "message": "Could not add this place. Your route is still here."}

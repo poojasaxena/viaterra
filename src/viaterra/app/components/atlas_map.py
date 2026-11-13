@@ -791,6 +791,8 @@ if (locateButton && locationStatus) {
     });
 }
 
+let previewJourneyPlace;
+
 if (searchInput && searchResults) {
     searchInput.addEventListener('input', () => {
         if (savedFinder) savedFinder.open = false;
@@ -836,13 +838,16 @@ if (searchInput && searchResults) {
             }
 
             // Enter previews the best match, just as the user expects.
-            showSearchPlace(features[0]);
+            if (!journeyEditor) showSearchPlace(features[0]);
             for (const feature of features) {
                 const label = searchPlaceLabel(feature.properties || {});
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.textContent = label;
-                button.addEventListener('click', () => showSearchPlace(feature, true));
+                button.addEventListener('click', () => {
+                    if (journeyEditor) previewJourneyPlace?.(feature);
+                    else showSearchPlace(feature, true);
+                });
                 searchResults.appendChild(button);
             }
         } catch (error) {
@@ -1375,6 +1380,8 @@ function setupJourneyEditor() {
     const chooser = document.getElementById('journey-pin-chooser');
     const choices = document.getElementById('journey-pin-choices');
     const back = document.getElementById('journey-pin-back');
+    const placePanel = document.getElementById('journey-place-panel');
+    let selectedResult = null;
     let pending = null;
     let queuedPin = null;
     map.doubleClickZoom.disable();
@@ -1395,7 +1402,10 @@ function setupJourneyEditor() {
         undo.disabled = Boolean(pending) || (!history.length && !queuedPin);
         save.disabled = Boolean(pending) || !keys.length || !title.value.trim();
         cancel.disabled = Boolean(pending);
-        title.disabled = country.disabled = Boolean(pending);
+        title.disabled = country.disabled = searchInput.disabled = Boolean(pending);
+        for (const button of placePanel.querySelectorAll('button')) {
+            button.disabled = Boolean(pending);
+        }
     }
 
     function refresh() {
@@ -1487,16 +1497,66 @@ function setupJourneyEditor() {
         back.focus({preventScroll: true});
     };
 
-    function submit(action) {
+    function submit(action, details = {}) {
         if (pending) return;
         if (action === 'save_journey') flushPin();
         pending = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
         updateButtons();
         window.parent.postMessage({
             type: 'viaterra:save',
-            request: {id: pending, token: journeyEditor.token, action, title: title.value, keys: [...keys]}
+            request: {id: pending, token: journeyEditor.token, action, title: title.value, keys: [...keys], ...details}
         }, '*');
     }
+
+    function showPlaceActions(nearby = [], confirm = null) {
+        placePanel.replaceChildren();
+        const name = document.createElement('strong');
+        name.textContent = selectedResult.name;
+        placePanel.appendChild(name);
+        if (!confirm) {
+            const note = document.createElement('div');
+            note.textContent = 'Saves a visited pin if this place is new.';
+            placePanel.appendChild(note);
+        }
+
+        function option(label, fields) {
+            placePanel.appendChild(memoryButton(label, () => {
+                flushPin();
+                submit('pick_place', {place: selectedResult, confirm, ...fields});
+            }));
+        }
+
+        for (const pin of nearby) {
+            option(`Use ${pin.name} (${pin.distance} m)`, {reuse_key: pin.key});
+        }
+        option(confirm ? 'Save a separate pin and add' : 'Add to journey', {});
+        placePanel.appendChild(memoryButton('Back', () => {
+            selectedResult = null;
+            placePanel.replaceChildren();
+            searchInput.focus();
+        }));
+    }
+
+    previewJourneyPlace = feature => {
+        if (pending) return;
+        flushPin();
+        const [longitude, latitude] = feature.geometry.coordinates;
+        const properties = feature.properties || {};
+        selectedResult = {
+            name: properties.name || searchPlaceLabel(properties),
+            longitude, latitude,
+            country: properties.country || '',
+            country_alpha2: properties.countrycode || ''
+        };
+        closeChooser();
+        searchResults.style.display = 'none';
+        map.jumpTo({center: [longitude, latitude], zoom: 13});
+        showPlaceActions();
+    };
+    searchInput.addEventListener('input', () => {
+        selectedResult = null;
+        placePanel.replaceChildren();
+    });
 
     title.addEventListener('input', updateButtons);
     country.addEventListener('change', () => {
@@ -1517,7 +1577,20 @@ function setupJourneyEditor() {
         const result = event.data.result;
         if (pending && result?.id === pending) {
             pending = null;
-            status.textContent = result.message;
+            if (result.picked_place) {
+                const place = result.picked_place;
+                byKey.set(place.place_key, place);
+                selectedResult = null;
+                placePanel.replaceChildren();
+                searchInput.value = '';
+                changeVisit(place.place_key);
+            } else if (result.nearby && selectedResult) {
+                showPlaceActions(result.nearby, result.id);
+                status.textContent = 'Saved pins nearby. Choose one or add a separate pin.';
+            } else {
+                status.textContent = result.message || '';
+                if (selectedResult) showPlaceActions();
+            }
             updateButtons();
         }
     });
@@ -1739,6 +1812,10 @@ _JOURNEY_CONTROLS = """
     <div id="journey-controls">
         <input id="journey-title" aria-label="Journey title" placeholder="Journey title" maxlength="120">
         <select id="journey-country" aria-label="Show saved pins by country"></select>
+        <input id="atlas-search-input" type="search" enterkeyhint="search"
+               aria-label="Search for a missing place" placeholder="Search for a missing place">
+        <div id="atlas-search-results" class="atlas-search-results"></div>
+        <div id="journey-place-panel"></div>
         <p>Click to add a visit. Double-click to remove its latest visit.</p>
         <div class="journey-actions">
             <button type="button" id="journey-undo">Undo</button>
@@ -1791,6 +1868,8 @@ _JOURNEY_CONTROLS = """
 .journey-actions button:disabled { opacity: .45; cursor: default; }
 #journey-status:not(:empty) { margin-top: 6px; }
 .journey-pin-hint { z-index: 21; overflow-wrap: anywhere; } .journey-pin-hint, .journey-pin-hint * { pointer-events: none; }
+#journey-place-panel strong { display: block; }
+#journey-place-panel button { margin-right: 5px; margin-bottom: 5px; }
 #journey-editor [hidden] { display: none; }
 .journey-chooser-heading { align-items: center; justify-content: space-between; }
 #journey-pin-choices {
