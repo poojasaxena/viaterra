@@ -228,6 +228,19 @@ body {
     display: none;
 }
 
+.atlas-drop-pin,
+.atlas-drop-pin-hint {
+    margin-top: 5px;
+    padding: 8px 12px;
+    border: 1px solid #D8CFBE;
+    border-radius: 8px;
+    background: #FFFCF5;
+    color: #254C60;
+    font: inherit;
+}
+.atlas-drop-pin { cursor: pointer; }
+.atlas-drop-pin[aria-pressed="true"] { background: #254C60; color: #FFFCF5; }
+
 .atlas-visited-toggle {
     display: flex;
     align-items: center;
@@ -572,6 +585,8 @@ const searchInput = document.getElementById('atlas-search-input');
 const searchResults = document.getElementById('atlas-search-results');
 const locateButton = document.getElementById('atlas-locate');
 const locationStatus = document.getElementById('atlas-location-status');
+const dropPinButton = document.getElementById('atlas-drop-pin');
+const dropPinHint = document.getElementById('atlas-drop-pin-hint');
 const savedFinder = document.getElementById('atlas-saved-finder');
 const savedQuery = document.getElementById('atlas-saved-query');
 const savedResults = document.getElementById('atlas-saved-results');
@@ -584,6 +599,8 @@ let saveRequest = null;
 let memoryRequest = null;
 let memoryPopup = null;
 let searchSequence = 0;
+let droppingPin = false;
+let placementEvent = null;
 
 function searchPlaceLabel(properties) {
     return [...new Set([properties.name, properties.city, properties.country]
@@ -592,20 +609,20 @@ function searchPlaceLabel(properties) {
 
 function updateSavePopup() {
     if (!savePopup) return;
-    const {button, status, result, nameInput} = savePopup;
+    const {button, status, result, nameInput, lookingUp} = savePopup;
     if (nameInput) {
         nameInput.hidden = !saveToken;
         nameInput.disabled = saveRequest?.popup === savePopup || result?.status === 'saved';
     }
     button.hidden = !saveToken || result?.status === 'saved';
-    button.disabled = saveRequest !== null || memoryRequest !== null || (nameInput !== null && !nameInput.value.trim());
+    button.disabled = lookingUp || saveRequest !== null || memoryRequest !== null || (nameInput !== null && !nameInput.value.trim());
     button.textContent = saveRequest?.popup === savePopup ? 'Saving…'
         : result?.status === 'nearby' ? 'Save separate flag' : 'Save as visited';
-    status.textContent = saveToken ? (result?.message || '') : '';
+    status.textContent = saveToken ? (lookingUp ? 'Finding a place name…' : result?.message || '') : '';
 }
 
 function requestSave(popup) {
-    if (!saveToken || saveRequest || memoryRequest) return;
+    if (!saveToken || popup.lookingUp || saveRequest || memoryRequest) return;
     searchResults.style.display = 'none';
     const id = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
     const confirm = popup.result?.status === 'nearby' ? popup.result.id : null;
@@ -617,7 +634,7 @@ function requestSave(popup) {
     }, '*');
 }
 
-function showSearchPlace(feature, closeResults = false, accuracy = null) {
+function showSearchPlace(feature, closeResults = false, accuracy = null, manual = false) {
     const properties = feature.properties || {};
     const [longitude, latitude] = feature.geometry.coordinates;
     const label = searchPlaceLabel(properties);
@@ -629,7 +646,7 @@ function showSearchPlace(feature, closeResults = false, accuracy = null) {
         country_alpha2: properties.countrycode || ''
     };
 
-    map.jumpTo({center: [longitude, latitude], zoom: 16});
+    if (!manual) map.jumpTo({center: [longitude, latitude], zoom: 16});
 
     if (searchMarker) searchMarker.remove();
 
@@ -637,9 +654,10 @@ function showSearchPlace(feature, closeResults = false, accuracy = null) {
     content.className = 'atlas-save-popup';
     const title = document.createElement('div');
     title.className = 'place-name';
-    title.textContent = place.name;
+    title.textContent = manual ? 'New pin' : place.name;
     content.appendChild(title);
-    const area = accuracy === null
+    const area = manual ? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
+        : accuracy === null
         ? [...new Set([properties.city, properties.country]
             .filter(value => value && value !== place.name))].join(', ')
         : `Accuracy about ${Math.round(accuracy)} m`;
@@ -658,14 +676,16 @@ function showSearchPlace(feature, closeResults = false, accuracy = null) {
     status.className = 'atlas-save-status';
     status.setAttribute('role', 'status');
     content.append(button, status);
-    const popup = {place, button, status, result: null, nameInput: null};
-    if (accuracy !== null) {
+    const popup = {place, button, status, result: null, nameInput: null, manual, lookingUp: manual, nameEdited: false};
+    if (manual || accuracy !== null) {
         const nameInput = document.createElement('input');
         nameInput.type = 'text';
-        nameInput.value = place.name;
+        nameInput.value = manual ? '' : place.name;
+        if (manual) nameInput.placeholder = 'Name this place';
         nameInput.maxLength = 250;
         nameInput.setAttribute('aria-label', 'Place name');
         nameInput.addEventListener('input', () => {
+            popup.nameEdited = true;
             popup.place.name = nameInput.value.trim();
             popup.result = null;
             updateSavePopup();
@@ -683,11 +703,69 @@ function showSearchPlace(feature, closeResults = false, accuracy = null) {
             .setDOMContent(content))
         .addTo(map);
     searchMarker.togglePopup();
+    if (manual) suggestDroppedPinName(popup, saveToken);
 
     if (closeResults) {
         searchInput.value = label;
         searchResults.style.display = 'none';
     }
+}
+
+async function suggestDroppedPinName(popup, token) {
+    const {latitude, longitude} = popup.place;
+    const coordinateLabel = `Pin at ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+    let suggestion = {name: coordinateLabel, country: '', country_alpha2: ''};
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3500);
+    try {
+        const params = new URLSearchParams({lat: latitude, lon: longitude, limit: 5});
+        const response = await fetch(`https://photon.komoot.io/reverse?${params}`, {
+            signal: controller.signal
+        });
+        if (response.ok) {
+            const {features = []} = await response.json();
+            suggestion = droppedPinSuggestion(features, longitude, latitude, suggestion);
+        }
+    } catch {
+        // The pin can still be saved with its coordinates as a label.
+    } finally {
+        clearTimeout(timeout);
+    }
+
+    if (popup !== savePopup || saveToken !== token) return;
+    popup.lookingUp = false;
+    popup.place.country = suggestion.country;
+    popup.place.country_alpha2 = suggestion.country_alpha2;
+    if (!popup.nameEdited) {
+        popup.nameInput.value = suggestion.name;
+        popup.place.name = suggestion.name;
+    }
+    updateSavePopup();
+}
+
+function droppedPinSuggestion(features, longitude, latitude, fallback) {
+    const origin = new maplibregl.LngLat(longitude, latitude);
+    const venueTypes = ['amenity', 'tourism', 'shop', 'leisure', 'historic'];
+    const localityTypes = ['city', 'town', 'village', 'hamlet', 'island', 'locality', 'suburb', 'neighbourhood'];
+    const nearest = features[0]?.properties || {};
+    const venue = features.find(feature => {
+        const props = feature.properties || {};
+        const coords = feature.geometry?.coordinates;
+        return props.name && venueTypes.includes(props.osm_key)
+            && Array.isArray(coords) && Number.isFinite(coords[0])
+            && Number.isFinite(coords[1]) && Math.abs(coords[1]) <= 90
+            && origin.distanceTo(new maplibregl.LngLat(coords[0], coords[1])) <= 50;
+    })?.properties;
+    const namedLocality = nearest.osm_key === 'place' && localityTypes.includes(nearest.osm_value)
+        ? nearest.name : '';
+    const locality = namedLocality || nearest.locality || nearest.district || nearest.city
+        || nearest.county;
+    const match = venue || nearest;
+    return {
+        name: (venue?.name || locality || fallback.name).slice(0, 250),
+        country: match.country || nearest.country || '',
+        country_alpha2: match.countrycode || nearest.countrycode || ''
+    };
 }
 
 function refreshVisitedPins() {
@@ -708,6 +786,42 @@ if (visitedToggle) {
     });
 }
 
+function setDropPinMode(active) {
+    droppingPin = active;
+    dropPinButton?.setAttribute('aria-pressed', String(active));
+    if (dropPinHint) dropPinHint.hidden = !active;
+    map.getCanvas().style.cursor = active ? 'crosshair' : '';
+}
+
+if (dropPinButton) {
+    dropPinButton.addEventListener('click', () => {
+        if (!saveToken || saveRequest || memoryRequest) return;
+        searchSequence++;
+        searchResults.style.display = 'none';
+        locationStatus.textContent = '';
+        savedFinder.open = false;
+        setDropPinMode(!droppingPin);
+    });
+
+    document.addEventListener('keydown', event => {
+        if (droppingPin && event.key === 'Escape') {
+            setDropPinMode(false);
+            dropPinButton.focus();
+        }
+    });
+
+    map.on('click', event => {
+        if (!droppingPin || !saveToken) return;
+        setDropPinMode(false);
+        placementEvent = event.originalEvent;
+        const {lng, lat} = event.lngLat.wrap();
+        showSearchPlace({
+            geometry: {coordinates: [lng, lat]},
+            properties: {}
+        }, false, null, true);
+    });
+}
+
 if (__SAVE_COMPONENT__) {
     window.addEventListener('message', event => {
         if (event.source !== window.parent || event.data?.type !== 'viaterra:state') return;
@@ -721,6 +835,10 @@ if (__SAVE_COMPONENT__) {
             memoryPopup = null;
         }
         saveToken = token;
+        if (dropPinButton) {
+            dropPinButton.hidden = !saveToken;
+            if (!saveToken && droppingPin) setDropPinMode(false);
+        }
         if (visitedToggle) {
             visitedToggle.parentElement.hidden = !saveToken;
             if (!saveToken) {
@@ -745,7 +863,9 @@ if (__SAVE_COMPONENT__) {
         if (saveRequest && result?.id === saveRequest.id) {
             saveRequest.popup.result = result;
             if (result.status === 'saved' && saveRequest.popup === savePopup) {
-                searchMarker.getElement().style.visibility = 'hidden';
+                if (!saveRequest.popup.manual || showVisitedPins) {
+                    searchMarker.getElement().style.visibility = 'hidden';
+                }
             }
             saveRequest = null;
         }
@@ -761,6 +881,7 @@ if (__SAVE_COMPONENT__) {
 
 if (locateButton && locationStatus) {
     locateButton.addEventListener('click', () => {
+        if (droppingPin) setDropPinMode(false);
         if (!window.isSecureContext || !navigator.geolocation) {
             locationStatus.textContent = 'Use HTTPS or localhost to access your location.';
             return;
@@ -796,6 +917,7 @@ let previewJourneyPlace;
 
 if (searchInput && searchResults) {
     searchInput.addEventListener('input', () => {
+        if (droppingPin) setDropPinMode(false);
         if (savedFinder) savedFinder.open = false;
         searchSequence++;
         searchResults.style.display = 'none';
@@ -1779,7 +1901,7 @@ function addBurgeeLayer(flagImage, heartImage) {
     });
   }
   map.on('click', 'burgee-pins', e => {
-    if (!e.features?.length) return;
+    if (droppingPin || (placementEvent && e.originalEvent === placementEvent) || !e.features?.length) return;
     const f = e.features[0];
     if (journeyEditor) {
         selectJourneyStop(e.features, e.originalEvent?.detail);
@@ -1789,8 +1911,8 @@ function addBurgeeLayer(flagImage, heartImage) {
     if (JOURNEY && place.stopNumbers) place.name = `${place.stopNumbers}. ${place.name}`;
     openVisitedPlace(place, f.geometry.coordinates);
   });
-  map.on('mouseenter', 'burgee-pins', () => {map.getCanvas().style.cursor = 'pointer';});
-  map.on('mouseleave', 'burgee-pins', () => {map.getCanvas().style.cursor = '';});
+  map.on('mouseenter', 'burgee-pins', () => {if (!droppingPin) map.getCanvas().style.cursor = 'pointer';});
+  map.on('mouseleave', 'burgee-pins', () => {if (!droppingPin) map.getCanvas().style.cursor = '';});
 
   if (journeyEditor) {
     const journeyPinHint = new maplibregl.Popup({
@@ -2250,6 +2372,11 @@ def render_atlas_map(
     )
 
     saved_finder = """
+        <button type="button" id="atlas-drop-pin" class="atlas-drop-pin"
+                aria-pressed="false" hidden>Drop a pin</button>
+        <div id="atlas-drop-pin-hint" class="atlas-drop-pin-hint" role="status" hidden>
+            Click or tap the map where you want the pin.
+        </div>
         <label class="atlas-visited-toggle" hidden>
             <input id="atlas-visited-toggle" type="checkbox" autocomplete="off">
             Show visited pins
