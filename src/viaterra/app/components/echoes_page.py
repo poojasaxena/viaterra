@@ -1,4 +1,4 @@
-"""Echoes: search the atlas and save a visited flag at the selected point."""
+"""Echoes: visited places and their personal memories."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from viaterra.app.components.atlas_map import render_atlas_map
 from viaterra.app.navigation import render_navigation
 from viaterra.app.ui import render_header
 from viaterra.db.capture import find_nearby, insert_visited_place
+from viaterra.db.echoes import get_echoes_places, get_place_memories, save_place_memory
 from viaterra.db.queries import get_visited_places
 
 _AUTHORIZED = "viaterra_capture_authorized"
@@ -21,7 +22,6 @@ _SAVE_TOKEN = "echoes_save_token"
 _LAST_REQUEST = "echoes_last_save_request"
 _RESULT = "echoes_save_result"
 _CONFIRMATION = "echoes_save_confirmation"
-_RECENTLY_SAVED = "echoes_recently_saved"
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -87,6 +87,12 @@ def save_selected_place(request: dict, *, authorized: bool) -> None:
         return
 
     st.session_state[_LAST_REQUEST] = request_id
+    action = request.get("action")
+    if action in ("read_memories", "save_memory"):
+        st.session_state[_RESULT] = handle_memory_request(request)
+        st.rerun()
+        return
+
     confirmation = st.session_state.pop(_CONFIRMATION, None)
     result = {"id": request_id, "status": "error"}
 
@@ -125,14 +131,6 @@ def save_selected_place(request: dict, *, authorized: bool) -> None:
                     country_name=place["country"],
                 )
                 result.update(status="saved", message="Saved to Viaterra")
-                st.session_state.setdefault(_RECENTLY_SAVED, []).append(
-                    {
-                        "name": place["name"],
-                        "latitude": place["latitude"],
-                        "longitude": place["longitude"],
-                        "country_code": place["country_alpha2"],
-                    }
-                )
                 clear_cache = getattr(get_visited_places, "clear", None)
                 if callable(clear_cache):
                     clear_cache()
@@ -143,6 +141,44 @@ def save_selected_place(request: dict, *, authorized: bool) -> None:
 
     st.session_state[_RESULT] = result
     st.rerun()
+
+
+def handle_memory_request(request: dict) -> dict:
+    """Handle a memory request after the owner and request ID are checked."""
+    result = {"id": request["id"], "status": "error"}
+    place_key = request.get("place_key")
+    if not isinstance(place_key, str) or not place_key or len(place_key) > 24:
+        return {**result, "message": "Open a visited flag to use Echoes."}
+
+    try:
+        if request["action"] == "read_memories":
+            return {
+                **result,
+                "status": "memories",
+                "memories": get_place_memories(place_key),
+            }
+
+        title = request.get("title")
+        story = request.get("story")
+        if not isinstance(title, str) or not title.strip() or len(title) > 120:
+            return {**result, "message": "Enter a title of up to 120 characters."}
+        if not isinstance(story, str) or len(story) > 4000:
+            return {**result, "message": "Keep the note to 4,000 characters."}
+        memory_id = request.get("memory_id")
+        if memory_id is not None:
+            if not isinstance(memory_id, str) or not re.fullmatch(r"[1-9][0-9]{0,18}", memory_id):
+                return {**result, "message": "Open the memory again to edit it."}
+            memory_id = int(memory_id)
+            if memory_id > 2**63 - 1:
+                return {**result, "message": "Open the memory again to edit it."}
+
+        save_place_memory(place_key, title.strip(), story.strip(), memory_id)
+        return {**result, "status": "memory_saved", "message": "Memory saved."}
+    except ValueError as exc:
+        return {**result, "message": str(exc)}
+    except Exception:
+        _LOGGER.exception("Echoes could not complete a memory request")
+        return {**result, "message": "Could not access this memory. Try again."}
 
 
 def render_echoes() -> None:
@@ -186,7 +222,7 @@ def render_echoes() -> None:
         save_enabled=authorized,
         save_token=st.session_state.get(_SAVE_TOKEN),
         save_result=st.session_state.get(_RESULT) if authorized else None,
-        recently_saved=st.session_state.get(_RECENTLY_SAVED),
+        places_loader=get_echoes_places,
     )
     if request is not None:
         save_selected_place(request, authorized=authorized)

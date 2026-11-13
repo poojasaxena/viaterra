@@ -1,6 +1,7 @@
 """Viaterra's interactive nautical atlas (MapLibre + OpenFreeMap)."""
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import streamlit as st
@@ -331,6 +332,47 @@ body {
     cursor: default;
 }
 
+.atlas-memory-panel {
+    max-height: min(270px, 48vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    width: min(250px, 62vw);
+    color: #254C60;
+}
+
+.atlas-memory-panel details {
+    padding: 5px 0;
+    border-bottom: 1px solid #D8CFBE;
+}
+
+.atlas-memory-panel summary {
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+
+.atlas-memory-panel p {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    margin: 5px 0;
+}
+
+.atlas-memory-panel input,
+.atlas-memory-panel textarea {
+    display: block;
+    width: 100%;
+    padding: 6px;
+    margin-top: 5px;
+    border: 1px solid #D8CFBE;
+    border-radius: 6px;
+    font: inherit;
+    color: inherit;
+    background: #FFFCF5;
+}
+
+.atlas-memory-panel button + button {
+    margin-left: 6px;
+}
+
 .atlas-save-status:not(:empty) {
     margin-top: 6px;
 }
@@ -429,7 +471,11 @@ const geojson = {
 function placeFeatures(places) {
   return places.map((p, i) => ({
     type: 'Feature', id: i,
-    properties: {name: p.name, country: p.country_code || ''},
+    properties: {
+        name: p.name,
+        country: p.country_code || '',
+        placeKey: p.place_key || ''
+    },
     geometry: {type: 'Point', coordinates: [p.longitude, p.latitude]}
   }));
 }
@@ -456,6 +502,8 @@ let searchMarker = null;
 let saveToken = null;
 let savePopup = null;
 let saveRequest = null;
+let memoryRequest = null;
+let memoryPopup = null;
 let searchSequence = 0;
 
 function searchPlaceLabel(properties) {
@@ -471,14 +519,14 @@ function updateSavePopup() {
         nameInput.disabled = saveRequest?.popup === savePopup || result?.status === 'saved';
     }
     button.hidden = !saveToken || result?.status === 'saved';
-    button.disabled = saveRequest !== null || (nameInput !== null && !nameInput.value.trim());
+    button.disabled = saveRequest !== null || memoryRequest !== null || (nameInput !== null && !nameInput.value.trim());
     button.textContent = saveRequest?.popup === savePopup ? 'Saving…'
         : result?.status === 'nearby' ? 'Save separate flag' : 'Save as visited';
     status.textContent = saveToken ? (result?.message || '') : '';
 }
 
 function requestSave(popup) {
-    if (!saveToken || saveRequest) return;
+    if (!saveToken || saveRequest || memoryRequest) return;
     searchResults.style.display = 'none';
     const id = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
     const confirm = popup.result?.status === 'nearby' ? popup.result.id : null;
@@ -569,7 +617,12 @@ if (__SAVE_COMPONENT__) {
 
         const {token, result, places} = event.data;
         if (token !== saveToken && savePopup) savePopup.result = null;
-        if (token !== saveToken) saveRequest = null;
+        if (token !== saveToken) {
+            saveRequest = null;
+            memoryRequest = null;
+            memoryPopup?.remove();
+            memoryPopup = null;
+        }
         saveToken = token;
         if (Array.isArray(places)) {
             geojson.features = placeFeatures(places);
@@ -582,6 +635,11 @@ if (__SAVE_COMPONENT__) {
                 searchMarker.getElement().style.visibility = 'hidden';
             }
             saveRequest = null;
+        }
+        if (memoryRequest && result?.id === memoryRequest.id) {
+            const {receive} = memoryRequest;
+            memoryRequest = null;
+            receive(result);
         }
         updateSavePopup();
     });
@@ -976,6 +1034,115 @@ function createLandTexture() {
 }
 
 
+function memoryButton(label, action) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'atlas-save-button';
+    button.textContent = label;
+    button.addEventListener('click', action);
+    return button;
+}
+
+function requestMemory(payload, receive) {
+    if (!saveToken || memoryRequest || saveRequest) return false;
+    const id = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
+    memoryRequest = {id, receive};
+    updateSavePopup();
+    window.parent.postMessage({
+        type: 'viaterra:save',
+        request: {...payload, id, token: saveToken}
+    }, '*');
+    return true;
+}
+
+function showPlaceMemories(popup, placeKey, open) {
+    open.hidden = true;
+    const panel = document.createElement('div');
+    panel.className = 'atlas-memory-panel';
+    popup.appendChild(panel);
+    const status = document.createElement('div');
+    status.className = 'atlas-save-status';
+    status.setAttribute('role', 'status');
+
+    function load() {
+        panel.replaceChildren(status);
+        status.textContent = 'Loading memories…';
+        if (!requestMemory({action: 'read_memories', place_key: placeKey}, result => {
+            if (!panel.isConnected) return;
+            if (result.status !== 'memories') {
+                status.textContent = result.message;
+                panel.appendChild(memoryButton('Try again', load));
+                return;
+            }
+            renderNotes(result.memories);
+        })) {
+            status.textContent = 'Wait for the current action to finish.';
+            panel.appendChild(memoryButton('Try again', load));
+        }
+    }
+
+    function renderNotes(notes) {
+        panel.replaceChildren();
+        for (const note of notes) {
+            const item = document.createElement('details');
+            const title = document.createElement('summary');
+            title.textContent = note.title;
+            const story = document.createElement('p');
+            story.textContent = note.story;
+            item.append(title, story, memoryButton('Edit', () => edit(note, notes)));
+            panel.appendChild(item);
+        }
+        panel.appendChild(memoryButton('Add a memory', () => edit(null, notes)));
+    }
+
+    function edit(note, notes) {
+        const title = document.createElement('input');
+        title.type = 'text';
+        title.maxLength = 120;
+        title.placeholder = 'Title';
+        title.setAttribute('aria-label', 'Memory title');
+        title.value = note?.title || '';
+        const story = document.createElement('textarea');
+        story.maxLength = 4000;
+        story.rows = 4;
+        story.placeholder = 'What do you remember?';
+        story.setAttribute('aria-label', 'Memory note');
+        story.value = note?.story || '';
+        const cancel = memoryButton('Cancel', () => renderNotes(notes));
+        const save = memoryButton('Save memory', () => {
+            if (!title.value.trim()) {
+                status.textContent = 'Give this memory a title.';
+                title.focus();
+                return;
+            }
+            if (!requestMemory({
+                action: 'save_memory', place_key: placeKey, memory_id: note?.id ?? null,
+                title: title.value, story: story.value
+            }, result => {
+                if (!panel.isConnected) return;
+                if (result.status === 'memory_saved') {
+                    panel.replaceChildren(status);
+                    status.textContent = result.message;
+                    panel.appendChild(memoryButton('View memories', load));
+                    return;
+                }
+                save.disabled = cancel.disabled = title.disabled = story.disabled = false;
+                status.textContent = result.message;
+            })) {
+                status.textContent = 'Wait for the current action to finish.';
+                return;
+            }
+            save.disabled = cancel.disabled = title.disabled = story.disabled = true;
+            status.textContent = 'Saving…';
+        });
+        status.textContent = '';
+        panel.replaceChildren(title, story, save, cancel, status);
+        title.focus();
+    }
+
+    load();
+}
+
 function addBurgeeLayer(image) {
   map.addImage('viaterra-burgee', image, {pixelRatio: 2});
   // No clustering: each saved position remains its own feature.
@@ -1006,8 +1173,19 @@ function addBurgeeLayer(image) {
       meta.textContent = f.properties.country;
       popup.appendChild(meta);
     }
-    new maplibregl.Popup({offset: 13, maxWidth: '260px'})
+    const placeKey = f.properties.placeKey;
+    if (saveToken && placeKey) {
+      const open = memoryButton('Memories', () => {
+        showPlaceMemories(popup, placeKey, open);
+      });
+      popup.appendChild(open);
+    }
+    const visitedPopup = new maplibregl.Popup({offset: 13, maxWidth: saveToken ? '320px' : '260px'})
       .setLngLat(f.geometry.coordinates).setDOMContent(popup).addTo(map);
+    if (saveToken && placeKey) {
+      memoryPopup?.remove();
+      memoryPopup = visitedPopup;
+    }
   });
   map.on('mouseenter', 'burgee-pins', () => {map.getCanvas().style.cursor = 'pointer';});
   map.on('mouseleave', 'burgee-pins', () => {map.getCanvas().style.cursor = '';});
@@ -1085,6 +1263,7 @@ def render_atlas_map(
     save_token: str | None = None,
     save_result: dict | None = None,
     recently_saved: list[dict] | None = None,
+    places_loader: Callable[[], list[dict]] | None = None,
 ) -> dict | None:
     """Render the nautical atlas, fixed on the homepage or navigable elsewhere.
 
@@ -1129,7 +1308,7 @@ def render_atlas_map(
 
     # Load visited locations
     try:
-        places = get_visited_places()
+        places = (places_loader or get_visited_places)()
     except Exception:
         st.error(
             "Viaterra couldn't load visited places from Neon. "
