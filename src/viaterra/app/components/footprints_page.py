@@ -100,10 +100,7 @@ def render_footprints() -> None:
 
     render_atlas_map(interactive=True, decorations=False, journey=True,
                      places_loader=lambda: stops)
-    if stops:
-        for order, place in enumerate(stops, start=1):
-            st.write(f"{order}. {place['name']}")
-    elif not journeys:
+    if not journeys:
         st.info("No journeys yet.")
 
 

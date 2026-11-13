@@ -481,6 +481,7 @@ __INTERACTIVE_ORNAMENT_CSS__
     <div id="map" role="application" aria-label="Interactive maritime atlas of individually marked visited places"></div>
     __SEARCH_CONTROL__
     __JOURNEY_CONTROLS__
+    __JOURNEY_PLAYBACK__
     <!-- Fixed cartographic ornament: not a geographic pin or map feature. -->
 
 <img
@@ -1612,8 +1613,7 @@ function journeyPins(stops) {
     return [...pins.values()];
 }
 
-function addJourneyRoute(stops, fit = false) {
-
+function journeyCoordinates(stops) {
     // Keep the line continuous across the antimeridian.
     const coordinates = [];
     for (const point of stops) {
@@ -1625,6 +1625,11 @@ function addJourneyRoute(stops, fit = false) {
         coordinates.push([longitude, point.latitude]);
     }
 
+    return coordinates;
+}
+
+function addJourneyRoute(stops, fit = false) {
+    const coordinates = journeyCoordinates(stops);
     const features = [];
     for (let i = 1; i < stops.length; i++) {
         if (stops[i].stop_number === stops[i - 1].stop_number + 1) {
@@ -1648,6 +1653,100 @@ function addJourneyRoute(stops, fit = false) {
     });
     if (fit) fitJourneyView(coordinates);
 }
+
+function setupJourneyPlayback() {
+    const panel = document.getElementById('journey-playback');
+    if (!panel || !points.length) return;
+
+    const play = document.getElementById('journey-play');
+    const previous = document.getElementById('journey-prev');
+    const next = document.getElementById('journey-next');
+    const picker = document.getElementById('journey-playback-stop');
+    const overview = document.getElementById('journey-overview');
+    const dot = document.createElement('span');
+    dot.className = 'journey-current-stop';
+    dot.setAttribute('aria-hidden', 'true');
+    const marker = new maplibregl.Marker({element: dot});
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let current = -1;
+    let timer = null;
+
+    for (const [index, stop] of points.entries()) {
+        picker.add(new Option(`${stop.stop_number}. ${stop.name}`, String(index)));
+    }
+
+    function updateControls() {
+        play.textContent = timer === null ? 'Play' : 'Pause';
+        previous.disabled = current <= 0;
+        next.disabled = current >= points.length - 1;
+        picker.value = current < 0 ? '' : String(current);
+    }
+
+    function pause() {
+        if (timer !== null) clearInterval(timer);
+        timer = null;
+        updateControls();
+    }
+
+    function show(index) {
+        current = index;
+        const stop = points[index];
+        const longitude = stop.longitude + 360 * Math.round(
+            (map.getCenter().lng - stop.longitude) / 360
+        );
+        const center = [longitude, stop.latitude];
+        marker.setLngLat(center).addTo(map);
+        const zoom = Math.max(6, Math.min(9, map.getZoom()));
+        if (reducedMotion) map.jumpTo({center, zoom});
+        else map.easeTo({center, zoom, duration: 650});
+        updateControls();
+    }
+
+    play.addEventListener('click', () => {
+        if (timer !== null) {
+            pause();
+            return;
+        }
+        if (current < 0 || current === points.length - 1) show(0);
+        if (points.length === 1) return;
+        timer = setInterval(() => {
+            show(current + 1);
+            if (current === points.length - 1) pause();
+        }, 2200);
+        updateControls();
+    });
+
+    previous.addEventListener('click', () => {
+        pause();
+        if (current > 0) show(current - 1);
+    });
+    next.addEventListener('click', () => {
+        pause();
+        if (current < points.length - 1) show(current + 1);
+    });
+
+    function showOverview() {
+        pause();
+        marker.remove();
+        current = -1;
+        fitJourneyView(journeyCoordinates(points));
+        updateControls();
+    }
+
+    picker.addEventListener('change', () => {
+        const selected = picker.value;
+        if (selected === '') showOverview();
+        else {
+            pause();
+            show(Number(selected));
+        }
+    });
+    overview.addEventListener('click', showOverview);
+    map.on('dragstart', pause);
+    updateControls();
+    panel.hidden = false;
+}
+
 
 function addBurgeeLayer(flagImage, heartImage) {
   map.addImage('viaterra-burgee', flagImage, {pixelRatio: 2});
@@ -1797,6 +1896,7 @@ map.on('load', () => {
     Promise.all(markers).then(([flag, heart]) => {
         addBurgeeLayer(flag, heart);
         if (journeyEditor) setupJourneyEditor();
+        else if (JOURNEY) setupJourneyPlayback();
     }).catch(() => {
         error.textContent = 'The map marker could not be loaded.';
         error.style.display = 'block';
@@ -1889,6 +1989,60 @@ _JOURNEY_CONTROLS = """
 </style>
 """
 
+
+_JOURNEY_PLAYBACK = """
+<section id="journey-playback" aria-label="Journey playback" hidden>
+    <button id="journey-play" type="button">Play</button>
+    <button id="journey-prev" type="button" aria-label="Previous stop">‹</button>
+    <select id="journey-playback-stop" aria-label="Jump to a stop">
+        <option value="">Choose a stop</option>
+    </select>
+    <button id="journey-next" type="button" aria-label="Next stop">›</button>
+    <button id="journey-overview" type="button">Overview</button>
+</section>
+<style>
+#journey-playback {
+    position: absolute;
+    left: 16px;
+    bottom: 30px;
+    z-index: 20;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    max-width: calc(100% - 32px);
+    padding: 8px;
+    border: 1px solid #D8CFBE;
+    border-radius: 8px;
+    background: #FFFCF5;
+    color: #254C60;
+    font: 14px system-ui, sans-serif;
+    box-shadow: 0 3px 12px #1d384026;
+}
+#journey-playback[hidden] { display: none; }
+#journey-playback button, #journey-playback select {
+    min-height: 40px;
+    padding: 6px 9px;
+    border: 1px solid #D8CFBE;
+    border-radius: 6px;
+    background: #FFFCF5;
+    color: inherit;
+    font: inherit;
+}
+#journey-playback button { cursor: pointer; }
+#journey-playback button:disabled { opacity: .45; cursor: default; }
+#journey-playback-stop { min-width: 0; max-width: min(215px, 100%); }
+#journey-play { background: #254C60; color: #FFFCF5; min-width: 62px; }
+.journey-current-stop {
+    width: 30px;
+    height: 30px;
+    border: 3px solid #82475E;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px #FFFCF5;
+    pointer-events: none;
+}
+</style>
+"""
 
 def render_atlas_map(
     *,
@@ -2113,11 +2267,14 @@ def render_atlas_map(
     html = html.replace("__JOURNEY__", json.dumps(journey))
     html = html.replace("__JOURNEY_EDITOR__", editor_json)
     html = html.replace("__JOURNEY_CONTROLS__", _JOURNEY_CONTROLS if journey_editor else "")
+    html = html.replace(
+        "__JOURNEY_PLAYBACK__",
+        _JOURNEY_PLAYBACK if journey and not journey_editor and places else "",
+    )
     html = html.replace("__LEGEND_START__", '<div class="legend" hidden>' if memories_only or journey else '<div class="legend">')
     html = html.replace(
         "__MEMORY_LEGEND__",
-        '<div class="legend" id="atlas-memory-legend" role="status"></div>' if memories_only else
-        '<div class="legend">Lines connect stops in travel order</div>' if journey and len(places) > 1 else "",
+        '<div class="legend" id="atlas-memory-legend" role="status"></div>' if memories_only else "",
     )
     html = html.replace("__SAVE_COMPONENT__", json.dumps(use_save_component))
     html = html.replace("__INTERACTIVE__", json.dumps(interactive))
