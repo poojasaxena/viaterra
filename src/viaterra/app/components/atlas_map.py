@@ -517,6 +517,7 @@ __DECORATIONS__
 import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs';
 
 const points = __PLACES__;
+const JOURNEY = __JOURNEY__;
 const MEMORIES_ONLY = __MEMORIES_ONLY__;
 const HEART_PATH = 'M20 30 10.5 20.4C3.5 13.4 13.4 6 20 13.5C26.6 6 36.5 13.4 29.5 20.4Z';
 let savedPlaces = points;
@@ -543,7 +544,8 @@ function placeFeatures(places) {
         name: p.name,
         country: p.country_code || '',
         placeKey: p.place_key || '',
-        hasMemory: p.has_memory === true
+        hasMemory: p.has_memory === true,
+        stopNumber: JOURNEY ? p.stop_number : ''
     },
     geometry: {type: 'Point', coordinates: [p.longitude, p.latitude]}
   }));
@@ -1340,6 +1342,45 @@ if (savedFinder) {
     });
 }
 
+function addJourneyRoute() {
+    if (!points.length) return;
+
+    // Keep the line continuous across the antimeridian.
+    const coordinates = [];
+    for (const point of points) {
+        let longitude = point.longitude;
+        if (coordinates.length) {
+            const previous = coordinates.at(-1)[0];
+            longitude += 360 * Math.round((previous - longitude) / 360);
+        }
+        coordinates.push([longitude, point.latitude]);
+    }
+
+    if (coordinates.length === 1) {
+        map.jumpTo({center: coordinates[0], zoom: 10});
+        return;
+    }
+
+    const features = [];
+    for (let i = 1; i < points.length; i++) {
+        if (points[i].stop_number === points[i - 1].stop_number + 1) {
+            features.push({
+                type: 'Feature', properties: {},
+                geometry: {type: 'LineString', coordinates: coordinates.slice(i - 1, i + 1)}
+            });
+        }
+    }
+    map.addSource('journey-route', {type: 'geojson', data: {type: 'FeatureCollection', features}});
+    map.addLayer({
+        id: 'journey-route', type: 'line', source: 'journey-route',
+        layout: {'line-cap': 'round', 'line-join': 'round'},
+        paint: {'line-color': '#82475E', 'line-width': 3, 'line-opacity': 0.9, 'line-dasharray': [2, 2]}
+    });
+    const bounds = new maplibregl.LngLatBounds(coordinates[0], coordinates[0]);
+    for (const coordinate of coordinates) bounds.extend(coordinate);
+    map.fitBounds(bounds, {padding: 50, maxZoom: 11, duration: 0});
+}
+
 function addBurgeeLayer(flagImage, heartImage) {
   map.addImage('viaterra-burgee', flagImage, {pixelRatio: 2});
   if (heartImage) map.addImage('viaterra-heart', heartImage, {pixelRatio: 2});
@@ -1359,10 +1400,23 @@ function addBurgeeLayer(flagImage, heartImage) {
       'icon-pitch-alignment': 'viewport'
     }
   });
+  if (JOURNEY) {
+    map.addLayer({
+      id: 'journey-stop-numbers', type: 'symbol', source: 'visited-places',
+      layout: {
+        'text-field': ['to-string', ['get', 'stopNumber']],
+        'text-size': 12, 'text-offset': [0, 1.3],
+        'text-anchor': 'top', 'text-allow-overlap': true,
+      },
+      paint: {'text-color': '#61324A', 'text-halo-color': '#FFFCF5', 'text-halo-width': 1}
+    });
+  }
   map.on('click', 'burgee-pins', e => {
     if (!e.features?.length) return;
     const f = e.features[0];
-    openVisitedPlace(f.properties, f.geometry.coordinates);
+    const place = {...f.properties};
+    if (JOURNEY) place.name = `${place.stopNumber}. ${place.name}`;
+    openVisitedPlace(place, f.geometry.coordinates);
   });
   map.on('mouseenter', 'burgee-pins', () => {map.getCanvas().style.cursor = 'pointer';});
   map.on('mouseleave', 'burgee-pins', () => {map.getCanvas().style.cursor = '';});
@@ -1408,6 +1462,7 @@ map.on('load', () => {
     // Both textures must be registered first.
     // -------------------------------------------------
     applyMaritimeStyle();
+    if (JOURNEY) addJourneyRoute();
 
     // -------------------------------------------------
     // 4. Load and display visited-place markers
@@ -1449,6 +1504,7 @@ def render_atlas_map(
     recently_saved: list[dict] | None = None,
     places_loader: Callable[[], list[dict]] | None = None,
     memories_only: bool = False,
+    journey: bool = False,
 ) -> dict | None:
     """Render the nautical atlas, fixed on the homepage or navigable elsewhere.
 
@@ -1502,11 +1558,17 @@ def render_atlas_map(
         return
 
     use_save_component = interactive and save_enabled is not None
-    if not places and not use_save_component:
+    if not places and not (use_save_component or journey):
         st.info("No geolocated places are available in Neon yet.")
         return
 
     places = list(places or [])
+    if journey:
+        places = [
+            {**place, "stop_number": index}
+            for index, place in enumerate(places, start=1)
+            if place["latitude"] is not None and place["longitude"] is not None
+        ]
     if use_save_component and recently_saved:
         existing = {
             (place["name"], float(place["latitude"]), float(place["longitude"]))
@@ -1633,7 +1695,7 @@ def render_atlas_map(
 
     html = html.replace(
         "__SEARCH_CONTROL__",
-        search_control if interactive else "",
+        search_control if interactive and not journey else "",
     )
 
     saved_finder = """
@@ -1650,10 +1712,12 @@ def render_atlas_map(
     """
     html = html.replace("__SAVED_FINDER__", saved_finder if memories_only else "")
     html = html.replace("__MEMORIES_ONLY__", json.dumps(memories_only))
-    html = html.replace("__LEGEND_START__", '<div class="legend" hidden>' if memories_only else '<div class="legend">')
+    html = html.replace("__JOURNEY__", json.dumps(journey))
+    html = html.replace("__LEGEND_START__", '<div class="legend" hidden>' if memories_only or journey else '<div class="legend">')
     html = html.replace(
         "__MEMORY_LEGEND__",
-        '<div class="legend" id="atlas-memory-legend" role="status"></div>' if memories_only else "",
+        '<div class="legend" id="atlas-memory-legend" role="status"></div>' if memories_only else
+        '<div class="legend">Lines connect stops in travel order</div>' if journey and len(places) > 1 else "",
     )
     html = html.replace("__SAVE_COMPONENT__", json.dumps(use_save_component))
     html = html.replace("__INTERACTIVE__", json.dumps(interactive))

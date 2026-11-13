@@ -158,6 +158,7 @@ compasses = "data/assets/illustrations/nautical/compasses"
 [headers]
 viaterra = "data/assets/headers/viaterra.svg"
 echoes = "data/assets/headers/echoes.svg"
+footprints = "data/assets/headers/footprints.svg"
 about_viaterra = "data/assets/headers/about_viaterra.svg"
 finding_my_anchor = "data/assets/headers/finding_my_anchor.svg"
 a_thousand_shore_one_anchor = "data/assets/headers/a_thousand_shore_one_anchor.svg"
