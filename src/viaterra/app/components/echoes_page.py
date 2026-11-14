@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import hmac
 import logging
-import os
 import re
 import secrets
 
@@ -17,22 +15,11 @@ from viaterra.db.capture import find_nearby, insert_visited_place
 from viaterra.db.echoes import get_echoes_places, get_place_memories, save_place_memory
 from viaterra.db.queries import get_visited_places
 
-_AUTHORIZED = "viaterra_capture_authorized"
 _SAVE_TOKEN = "echoes_save_token"
 _LAST_REQUEST = "echoes_last_save_request"
 _RESULT = "echoes_save_result"
 _CONFIRMATION = "echoes_save_confirmation"
 _LOGGER = logging.getLogger(__name__)
-
-
-def owner_password() -> str | None:
-    value = os.environ.get("VIATERRA_EDITOR_PASSWORD")
-    if value:
-        return value
-    try:
-        return st.secrets.get("VIATERRA_EDITOR_PASSWORD")
-    except (FileNotFoundError, KeyError):
-        return None
 
 
 def selected_place(value: object) -> dict:
@@ -69,9 +56,9 @@ def selected_place(value: object) -> dict:
     }
 
 
-def save_selected_place(request: dict, *, authorized: bool) -> None:
+def save_selected_place(request: dict) -> None:
     """Handle one owner request and return the outcome to the map on rerun."""
-    if not authorized or not isinstance(request, dict):
+    if not isinstance(request, dict):
         return
 
     token = request.get("token")
@@ -191,41 +178,19 @@ def render_echoes() -> None:
     render_header(header_key="echoes", subtitle="Every place holds a memory")
     render_navigation(active_page="Echoes")
 
-    password = owner_password()
-    authorized = bool(password and st.session_state.get(_AUTHORIZED, False))
-    if not authorized:
-        st.session_state.pop(_SAVE_TOKEN, None)
-
-    if authorized:
-        if _SAVE_TOKEN not in st.session_state:
-            st.session_state[_SAVE_TOKEN] = secrets.token_urlsafe(24)
-        if st.button("Lock editing", type="tertiary"):
-            st.session_state[_AUTHORIZED] = False
-            st.session_state.pop(_SAVE_TOKEN, None)
-            st.session_state.pop(_CONFIRMATION, None)
-            st.session_state.pop(_RESULT, None)
-            st.rerun()
-    elif password:
-        with st.popover("Unlock editing"):
-            with st.form("echoes_login", clear_on_submit=True):
-                supplied = st.text_input("Owner password", type="password")
-                login = st.form_submit_button("Unlock")
-            if login:
-                if hmac.compare_digest(supplied.encode(), password.encode()):
-                    st.session_state[_AUTHORIZED] = True
-                    st.rerun()
-                st.error("Incorrect password.")
+    if _SAVE_TOKEN not in st.session_state:
+        st.session_state[_SAVE_TOKEN] = secrets.token_urlsafe(24)
 
     request = render_atlas_map(
         interactive=True,
         decorations=False,
-        save_enabled=authorized,
+        save_enabled=True,
         save_token=st.session_state.get(_SAVE_TOKEN),
-        save_result=st.session_state.get(_RESULT) if authorized else None,
-        places_loader=get_echoes_places if authorized else list,
+        save_result=st.session_state.get(_RESULT),
+        places_loader=get_echoes_places,
         memories_only=True,
     )
     if request is not None:
-        save_selected_place(request, authorized=authorized)
+        save_selected_place(request)
 
     st.caption("Place search data © OpenStreetMap contributors, delivered by Photon.")

@@ -10,7 +10,7 @@ description = "A personal travel atlas of journeys, places, and memories."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "streamlit>=1.40",
+    "streamlit[auth]>=1.66,<2",
     "pandas>=2.0",
     "plotly>=5.0",
     "psycopg[binary]>=3.2",

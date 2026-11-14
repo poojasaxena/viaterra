@@ -1,13 +1,12 @@
 """Footprints, the ordered journeys in Viaterra."""
 
-import hmac
 import logging
 import secrets
 
 import streamlit as st
 
 from viaterra.app.components.atlas_map import render_atlas_map
-from viaterra.app.components.echoes_page import owner_password, selected_place
+from viaterra.app.components.echoes_page import selected_place
 from viaterra.app.navigation import render_navigation
 from viaterra.app.ui import render_header
 from viaterra.db.capture import find_nearby, insert_visited_place
@@ -26,22 +25,6 @@ def render_footprints() -> None:
     render_header(header_key="footprints", subtitle="Journeys in the order I travelled")
     render_navigation(active_page="Footprints")
 
-    password = owner_password()
-    authorized = bool(password and st.session_state.get("viaterra_capture_authorized"))
-    if password and not authorized:
-        with st.popover("Unlock editing"):
-            with st.form("footprints_login", clear_on_submit=True):
-                supplied = st.text_input("Owner password", type="password")
-                if st.form_submit_button("Unlock"):
-                    if hmac.compare_digest(supplied.encode(), password.encode()):
-                        st.session_state["viaterra_capture_authorized"] = True
-                        st.rerun()
-                    st.error("Incorrect password.")
-    elif authorized and st.button("Lock editing", type="tertiary"):
-        st.session_state["viaterra_capture_authorized"] = False
-        st.session_state.pop(_DRAFT, None)
-        st.rerun()
-
     try:
         journeys = list_journeys()
         if _SELECT_SAVED in st.session_state:
@@ -57,20 +40,19 @@ def render_footprints() -> None:
         st.error("Viaterra couldn't load journeys from Neon.")
         return
 
-    if authorized:
-        new, edit = st.columns(2)
-        if new.button("New journey"):
-            st.session_state["footprints_title"] = ""
-            st.session_state[_DRAFT] = {"id": None, "keys": [], "token": secrets.token_urlsafe(24)}
-        if edit.button("Edit journey", disabled=journey_id is None):
-            st.session_state["footprints_title"] = journeys[journey_id]
-            st.session_state[_DRAFT] = {
-                "id": journey_id, "keys": [place["place_key"] for place in stops],
-                "token": secrets.token_urlsafe(24),
-                "country": stops[0].get("country_code") if stops else None,
-            }
+    new, edit = st.columns(2)
+    if new.button("New journey"):
+        st.session_state["footprints_title"] = ""
+        st.session_state[_DRAFT] = {"id": None, "keys": [], "token": secrets.token_urlsafe(24)}
+    if edit.button("Edit journey", disabled=journey_id is None):
+        st.session_state["footprints_title"] = journeys[journey_id]
+        st.session_state[_DRAFT] = {
+            "id": journey_id, "keys": [place["place_key"] for place in stops],
+            "token": secrets.token_urlsafe(24),
+            "country": stops[0].get("country_code") if stops else None,
+        }
 
-    draft = st.session_state.get(_DRAFT) if authorized else None
+    draft = st.session_state.get(_DRAFT)
     if draft is not None:
         try:
             places = available_stops()
